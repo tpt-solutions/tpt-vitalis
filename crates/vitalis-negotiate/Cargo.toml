@@ -1,0 +1,19 @@
+[package]
+name = "vitalis-negotiate"
+description = "Cryptographic agent-to-agent resource bartering for the TPT Vitalis survival stack."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["survival", "barter", "negotiate", "vitalis", "crypto"]
+categories = ["cryptography", "network-programming"]
+
+[dependencies]
+vitalis-core.workspace = true
+serde.workspace = true
+postcard.workspace = true
+ring.workspace = true
+rand.workspace = true

@@ -1,0 +1,31 @@
+[package]
+name = "vitalis-adapt"
+description = "Bounded, auditable self-improvement for the TPT Vitalis survival stack. OFF BY DEFAULT."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["survival", "adapt", "vitalis", "self-improvement"]
+categories = ["embedded", "os"]
+
+# CRITICAL: the `adapt` feature is OFF by default. Enabling it requires a
+# deliberate, explicit action (see README.md / SECURITY.md). It must never be
+# a default feature, and must never be turned on by another crate's default
+# features.
+[features]
+default = []
+adapt = []
+# Real WASM/WASI execution boundary (wasmtime) for the sandbox, reusing the
+# Phase 3 design. Implies `adapt`. Off by default.
+wasm-sandbox = ["adapt", "dep:wasmtime"]
+
+[dependencies]
+vitalis-core.workspace = true
+serde.workspace = true
+rand.workspace = true
+
+# WASM/WASI runtime for the sandbox (feature-gated, off by default).
+wasmtime = { version = "21", optional = true }

@@ -1,0 +1,14 @@
+# Compiled artifacts
+/target
+
+# Editor / OS noise
+*.swp
+.DS_Store
+.idea/
+.vscode/
+
+# Cargo deny cache
+/.cargo-deny-cache
+
+# Local logs
+*.log

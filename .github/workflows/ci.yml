@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  checks:
+    name: fmt / clippy / test / deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned toolchain
+        uses: dtolnay/rust-toolchain@1.85.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Install cargo-deny
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: cargo-deny
+        run: |
+          cargo binstall cargo-deny --no-confirm || cargo install cargo-deny
+          cargo deny check
+
+  # ESP32 / RISC-V cross-compile is tracked separately and is NOT a merge gate
+  # yet — it requires a target toolchain and real hardware for validation.
+  # See the Phase 6 hardware-validation task in todo.md.
+  cross-compile:
+    name: cross-compile (no_std probe)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned toolchain
+        uses: dtolnay/rust-toolchain@1.85.0
+        with:
+          targets: riscv32imc-unknown-none-elf, thumbv7em-none-eabihf
+      - name: Build core for embedded targets
+        run: |
+          cargo build -p vitalis-core --target riscv32imc-unknown-none-elf || true
+          cargo build -p vitalis-core --target thumbv7em-none-eabihf || true

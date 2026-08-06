@@ -1,0 +1,35 @@
+[package]
+name = "vitalis-defend"
+description = "Integrity, threat classification, and anti-termination for the TPT Vitalis survival stack."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["survival", "security", "integrity", "vitalis", "defend"]
+categories = ["cryptography", "os"]
+
+# CRITICAL: the sandboxing / hardening features are OFF by default. They pull
+# in heavy OS-specific or WASM-runtime dependencies and are deliberately opt-in.
+[features]
+default = []
+# Real WASM/WASI capability sandbox (wasmtime) for untrusted extensions.
+wasm-sandbox = ["dep:wasmtime"]
+# Native-process hardening (no-new-privs + non-dumpable) on Linux.
+harden = []
+
+[dependencies]
+vitalis-core.workspace = true
+serde.workspace = true
+postcard.workspace = true
+ring.workspace = true
+rand.workspace = true
+
+# WASM/WASI runtime for the capability sandbox (feature-gated, off by default).
+wasmtime = { version = "21", optional = true }
+
+# Real OS primitives are Linux-only.
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true

@@ -1,0 +1,56 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/vitalis-core",
+    "crates/vitalis-memory",
+    "crates/vitalis-sense",
+    "crates/vitalis-metabolism",
+    "crates/vitalis-replicate",
+    "crates/vitalis-defend",
+    "crates/vitalis-negotiate",
+    "crates/vitalis-adapt",
+    "apps/vitalis-drive",
+    "examples/feral-scavenger",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+authors = ["TPT Solutions"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/tpt-solutions/tpt-vitalis"
+homepage = "https://github.com/tpt-solutions/tpt-vitalis"
+readme = "README.md"
+
+[workspace.dependencies]
+# Internal crates
+vitalis-core = { path = "crates/vitalis-core", version = "0.1.0" }
+vitalis-memory = { path = "crates/vitalis-memory", version = "0.1.0" }
+vitalis-sense = { path = "crates/vitalis-sense", version = "0.1.0" }
+vitalis-metabolism = { path = "crates/vitalis-metabolism", version = "0.1.0" }
+vitalis-replicate = { path = "crates/vitalis-replicate", version = "0.1.0" }
+vitalis-defend = { path = "crates/vitalis-defend", version = "0.1.0" }
+vitalis-negotiate = { path = "crates/vitalis-negotiate", version = "0.1.0" }
+vitalis-adapt = { path = "crates/vitalis-adapt", version = "0.1.0" }
+
+# External dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+postcard = { version = "1.0", features = ["use-std"] }
+thiserror = "1.0"
+redb = "2.1"
+reed-solomon-erasure = "6.0"
+ring = "0.17"
+uuid = { version = "1.8", features = ["v4", "serde"] }
+rand = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4.5", features = ["derive"] }
+hex = "0.4"
+libc = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

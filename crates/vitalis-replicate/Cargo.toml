@@ -1,0 +1,24 @@
+[package]
+name = "vitalis-replicate"
+description = "Checkpointing, live migration, and erasure-coded redundancy for the TPT Vitalis survival stack."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["survival", "replication", "migration", "vitalis", "erasure"]
+categories = ["embedded", "os"]
+
+[dependencies]
+vitalis-core.workspace = true
+vitalis-memory.workspace = true
+vitalis-sense.workspace = true
+serde.workspace = true
+postcard.workspace = true
+reed-solomon-erasure.workspace = true
+rand.workspace = true
+
+[dev-dependencies]
+tempfile = "3.10"

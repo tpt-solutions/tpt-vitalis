@@ -1,0 +1,22 @@
+[package]
+name = "vitalis-metabolism"
+description = "Resource budgeting and self-throttling for the TPT Vitalis survival stack."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["survival", "energy", "throttle", "vitalis", "budget"]
+categories = ["embedded", "os"]
+
+[dependencies]
+vitalis-core.workspace = true
+serde.workspace = true
+rand.workspace = true
+
+# Real OS primitives are Linux-only; elsewhere the crate uses simulated
+# backends, so libc is only linked on Linux.
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true

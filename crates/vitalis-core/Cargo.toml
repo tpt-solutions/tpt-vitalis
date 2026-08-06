@@ -1,0 +1,20 @@
+[package]
+name = "vitalis-core"
+description = "Shared identity, resource, threat, and capability types for the TPT Vitalis survival stack."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["survival", "agent", "vitalis", "tpt", "autonomous"]
+categories = ["embedded", "os", "data-structures"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+postcard.workspace = true
+hex.workspace = true
+rand.workspace = true
+uuid.workspace = true

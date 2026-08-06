@@ -1,0 +1,26 @@
+[package]
+name = "feral-scavenger"
+description = "Demo agent: scavenge spare compute on a simulated mesh, sip power, checkpoint under pressure."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["survival", "demo", "vitalis", "feral"]
+categories = ["examples"]
+
+[[bin]]
+name = "feral-scavenger"
+path = "src/main.rs"
+
+[dependencies]
+vitalis-core.workspace = true
+vitalis-sense.workspace = true
+vitalis-metabolism.workspace = true
+vitalis-replicate.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

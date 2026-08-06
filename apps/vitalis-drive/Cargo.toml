@@ -1,0 +1,40 @@
+[package]
+name = "vitalis-drive"
+description = "The reference Vitalis agent: the survival goal loop that composes the stack."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["survival", "agent", "vitalis", "drive"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "vitalis-drive"
+path = "src/main.rs"
+
+[dependencies]
+vitalis-core.workspace = true
+vitalis-memory.workspace = true
+vitalis-sense.workspace = true
+vitalis-metabolism.workspace = true
+vitalis-replicate.workspace = true
+vitalis-defend.workspace = true
+vitalis-adapt = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# `adapt` is OFF by default. The drive only composes vitalis-adapt when this
+# feature is explicitly enabled — mirroring the crate's own off-by-default gate.
+[features]
+default = []
+adapt = ["dep:vitalis-adapt", "vitalis-adapt/adapt"]
+# Opt-in native hardening via vitalis-defend (no-new-privs + non-dumpable on Linux).
+harden = ["vitalis-defend/harden"]
+# Run the drive with the real wasmtime-backed adapt sandbox.
+wasm-sandbox = ["adapt", "vitalis-adapt/wasm-sandbox"]

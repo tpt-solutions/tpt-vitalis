@@ -1,0 +1,17 @@
+[package]
+name = "vitalis-sense"
+description = "Environment perception and resource/peer discovery for the TPT Vitalis survival stack."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["survival", "discovery", "vitalis", "sense", "mesh"]
+categories = ["network-programming", "embedded"]
+
+[dependencies]
+vitalis-core.workspace = true
+serde.workspace = true
+rand.workspace = true
