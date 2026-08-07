@@ -3,10 +3,14 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use vitalis_core::traits::{Defend, Sense};
-use vitalis_core::{AgentId, Capability, CapabilityScope, Error, Result, SurvivalProfile};
+use vitalis_core::{
+    AgentId, Capability, CapabilityScope, Error, Resource, ResourceKind, Result, SurvivalProfile,
+    ThreatSignal,
+};
 use vitalis_defend::{BoundVerifier, Defender, TerminationSignal};
 use vitalis_memory::{IdentityRecord, IdentityStore, MemoryStore, StateStore};
 use vitalis_metabolism::Metabolism;
+use vitalis_negotiate::Negotiator;
 use vitalis_replicate::{ReplicationReason, Replicator};
 use vitalis_sense::mesh::SimulatedMesh;
 use vitalis_sense::sense::{LocalSensor, SenseTick};
@@ -33,6 +37,10 @@ pub struct DriveConfig {
     /// the agent runs identically in CI and on constrained targets.
     #[serde(default)]
     pub real_sensors: bool,
+    /// A trade that is accepted but never settled for this many cycles is
+    /// treated as a broken bargain (Phase 8 reputation deepening).
+    #[serde(default = "default_negotiate_timeout")]
+    pub negotiate_timeout: u64,
 }
 
 impl Default for DriveConfig {
@@ -45,6 +53,7 @@ impl Default for DriveConfig {
             replicate_below: 0.4,
             simulate_kill_at: None,
             real_sensors: false,
+            negotiate_timeout: 5,
         }
     }
 }
@@ -52,6 +61,12 @@ impl Default for DriveConfig {
 /// Default fraction-of-capacity at which the agent proactively replicates.
 fn default_replicate_below() -> f64 {
     0.4
+}
+
+/// Default cycle count after which an un-settled accepted trade is a broken
+/// bargain (Phase 8 reputation deepening).
+fn default_negotiate_timeout() -> u64 {
+    5
 }
 
 /// The capability set a profile advertises on the mesh.
@@ -99,6 +114,7 @@ pub struct Drive {
     metabolism: Metabolism,
     replicator: Replicator,
     defender: Defender,
+    negotiator: Negotiator,
     state_store: StateStore,
     energy_remaining: f64,
     replicated: bool,
@@ -180,6 +196,14 @@ impl Drive {
         }
 
         let energy_remaining = config.energy_capacity;
+        // The social layer: barter + reputation. Starts with a small ledger so
+        // the agent can both offer and settle trades; the drive's negotiate
+        // step feeds broken bargains into the same threat-classify pipeline as
+        // termination/starvation signals.
+        let negotiator = Negotiator::new(&[
+            Resource::new(ResourceKind::Compute, 1.0, "cu"),
+            Resource::new(ResourceKind::Energy, config.energy_capacity, "J"),
+        ])?;
         Ok(Self {
             agent_id,
             config,
@@ -187,6 +211,7 @@ impl Drive {
             metabolism,
             replicator,
             defender,
+            negotiator,
             state_store,
             energy_remaining,
             replicated: false,
@@ -353,6 +378,34 @@ impl Drive {
                 if ev.is_escape_worthy() && !self.replicated {
                     self.replicate(ReplicationReason::DyingHardware)?;
                     replications += 1;
+                }
+            }
+
+            // 4b. NEGOTIATE: sweep any trades that were accepted but never
+            // settled and treat each broken bargain as a hostile-peer warning
+            // signal, fed through the very same `ThreatSignal`/`classify`
+            // pipeline as termination/starvation. Hearsay/decay live inside the
+            // `Negotiator`; here we only surface confirmed broken bargains.
+            let broken = self
+                .negotiator
+                .sweep_timeouts(cycle, self.config.negotiate_timeout);
+            for bb in &broken {
+                let signal = ThreatSignal {
+                    source: "negotiate".into(),
+                    code: "BROKEN_BARGAIN".into(),
+                    message: format!("peer {} broke a bargain", bb.peer),
+                };
+                if let Some(ev) = self.defender.classify(&signal)? {
+                    tracing::warn!(
+                        cycle,
+                        trust_after = bb.trust_after,
+                        dings_after = bb.dings_after,
+                        "broken bargain classified: hostile peer (warning)"
+                    );
+                    // A broken bargain is a warning, not escape-worthy on its
+                    // own; the drive records it and continues. (Repeated direct
+                    // bad faith would blacklist the peer at the `Negotiator`.)
+                    let _ = ev;
                 }
             }
 

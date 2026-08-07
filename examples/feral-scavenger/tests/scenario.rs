@@ -114,18 +114,24 @@ fn negotiate_demo_settles_correctly() {
     let offer = scavenger.propose_offer(
         Resource::new(ResourceKind::Compute, 2.0, "cu"),
         Resource::new(ResourceKind::Energy, 500.0, "J"),
+        0,
     );
     let accept = rich
-        .receive_offer(&offer)
+        .receive_offer(&offer, 0)
         .unwrap()
         .expect("rich peer accepts");
     let BarterMessage::Accept { nonce, .. } = accept.message().unwrap() else {
         panic!("expected an Accept");
     };
+    scavenger.receive_accept(&accept).unwrap();
     let settle = rich
         .deliver(Resource::new(ResourceKind::Energy, 500.0, "J"), nonce)
         .unwrap();
-    scavenger.receive_settle(&settle).unwrap();
+    scavenger.receive_settle(&settle, 0).unwrap();
+    let scav_settle = scavenger
+        .deliver(Resource::new(ResourceKind::Compute, 2.0, "cu"), nonce)
+        .unwrap();
+    rich.receive_settle(&scav_settle, 0).unwrap();
 
     assert_eq!(scavenger.ledger().balance(ResourceKind::Energy), 500.0);
     assert_eq!(rich.ledger().balance(ResourceKind::Energy), 500.0);

@@ -534,6 +534,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "vitalis-core",
+ "vitalis-defend",
  "vitalis-metabolism",
  "vitalis-negotiate",
  "vitalis-replicate",
@@ -1698,6 +1699,7 @@ dependencies = [
  "vitalis-defend",
  "vitalis-memory",
  "vitalis-metabolism",
+ "vitalis-negotiate",
  "vitalis-replicate",
  "vitalis-sense",
 ]

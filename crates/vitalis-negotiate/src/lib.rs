@@ -16,4 +16,4 @@ pub mod negotiator;
 
 pub use crypto::Signer;
 pub use message::{BarterMessage, SignedMessage};
-pub use negotiator::{Ledger, Negotiator, Reputation};
+pub use negotiator::{BrokenBargain, Ledger, Negotiator, Reputation};

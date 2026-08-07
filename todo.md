@@ -482,61 +482,126 @@ and one-hop indirect reciprocity. Full design: Claude plan history
 survives independent of that file, per the repo's existing housekeeping habit.*
 
 ### vitalis-negotiate
-- [ ] Fix forgeable proposer-side settlement: `receive_accept` binds the
+- [x] Fix forgeable proposer-side settlement: `receive_accept` binds the
       accepter's identity to a proposed nonce so a `Settle` can't be credited
       from an unrelated third party who merely observed the nonce on the wire.
-- [ ] Fix unchecked delivery: `receive_settle` checks the delivered resource
+- [x] Fix unchecked delivery: `receive_settle` checks the delivered resource
       kind/quantity against what was actually promised (`fulfillment_ratio`)
       instead of blindly crediting and never scoring.
-- [ ] Replace the flat `trust`/`blacklisted` scalar with decayed Beta-reputation
+- [x] Replace the flat `trust`/`blacklisted` scalar with decayed Beta-reputation
       bookkeeping (direct pool + hearsay pool); blacklisting gated by direct
       evidence only — gossip can move trust but can never blacklist by itself.
-- [ ] `sweep_timeouts(now, timeout)`: automatic broken-bargain detection (no
+- [x] `sweep_timeouts(now, timeout)`: automatic broken-bargain detection (no
       more manual-only `penalize()`).
-- [ ] `report_reputation`/`receive_reputation_report`: one-hop gossiped
+- [x] `report_reputation`/`receive_reputation_report`: one-hop gossiped
       reputation reports (indirect reciprocity), with self-vouching,
       blacklisted-reporter, and staleness guards.
-- [ ] Reputation decay/forgiveness over a configurable half-life.
-- [ ] New/updated tests: forged-settle regression, partial-delivery scoring,
+- [x] Reputation decay/forgiveness over a configurable half-life.
+- [x] New/updated tests: forged-settle regression, partial-delivery scoring,
       auto-timeout detection, decay/forgiveness, gossip-without-direct-trade,
       gossip-from-blacklisted-reporter-ignored, self-report rejection, stale
       report rejection.
 
 ### vitalis-defend
-- [ ] `ThreatClassifier`: new `"BROKEN_BARGAIN"` signal code →
+- [x] `ThreatClassifier`: new `"BROKEN_BARGAIN"` signal code →
       `ThreatClass::HostilePeer`/`Severity::Warning`, plus a test.
 
 ### apps/vitalis-drive
-- [ ] Wire a `Negotiator` into `Drive`; feed `sweep_timeouts` output through
+- [x] Wire a `Negotiator` into `Drive`; feed `sweep_timeouts` output through
       the existing `ThreatSignal`/`classify` pipeline each cycle (currently a
       no-op since nothing in `Drive` trades yet — closes part of Phase 7
       P1.2/P1.3).
 
 ### examples/feral-scavenger
-- [ ] Gossip demo: a dishonest peer stiffs one honest peer, which then
+- [x] Gossip demo: a dishonest peer stiffs one honest peer, which then
       reports it to a second honest peer who never traded with it directly —
       show the second peer's trust drop from the report alone, and a third
       peer's corroborating report dropping it further, without ever
       blacklisting on hearsay alone.
 
-### Open question (not yet scoped — see 2026-08-07 session note)
-- [ ] **Multi-hop / relayed gossip and competitive misreporting.** Today a
-      report only ever carries the reporter's own direct experience (capped
-      at one hop) specifically to bound amplification of false claims. Worth
-      a separate design pass: (a) *relay* — propagating a report you were
-      told, not just what you experienced, needs a hop-count + per-hop trust
-      discount + a provenance chain so a receiver can see how indirect a
-      claim is; (b) *strategic/competitive misreporting* — a well-reputed
-      peer lying about a rival for its own advantage (e.g. to knock a
-      competitor for a resource out of the trust network), which the current
-      "reporter isn't blacklisted" guard does not catch, since a competitive
-      liar need not be a low-reputation peer at all.
+### Multi-hop relay + auditable witness breadth (indirect-of-indirect gossip)
+- [x] `BarterMessage::RelayedReputationReport{subject, origin, hops, provenance}`
+      — relays carry the original hop-1 signed report as `provenance` so
+      trust anchors to the origin's real signature, not the relayer's word.
+- [x] `Negotiator::relay_reputation_report` (forward a received claim,
+      incrementing hops, capped at `MAX_HOPS`) and `receive_reputation_report`
+      extended to verify embedded provenance + fold into hearsay keyed by
+      `origin` (dedupes the same claim arriving via multiple relay paths).
+- [x] Per-hop trust discount (`HEARSAY_WEIGHT * PER_HOP_DECAY^(hops-1)`);
+      blacklisting stays gated by direct evidence only, unchanged.
+- [x] `Negotiator::hearsay_origins`: distinct-witness-count query — the
+      auditability answer to competitive misreporting (no sound way to
+      algorithmically detect a well-reputed peer choosing to lie, so instead
+      make the breadth of evidence backing a trust score inspectable).
+- [x] Tests: provenance-intact relay, hop-cap enforcement, relay-via-
+      blacklisted-relayer ignored, tampered-subject-mismatch rejected,
+      multi-path dedup, distinct-witness count.
+
+### Mechanical follow-through
+- [x] `crates/vitalis-negotiate/tests/barter.rs`: update the 6 existing
+      tests for the new `now`/`receive_accept` signatures; split
+      `bad_faith_peer_is_penalized` into an auto-timeout test and a
+      manual-`penalize` test.
+- [x] `apps/vitalis-drive/Cargo.toml`: add `vitalis-negotiate.workspace = true`;
+      `src/loop_.rs`: add a `Negotiator` field to `Drive`, constructed
+      alongside `defender`.
+- [x] `examples/feral-scavenger/Cargo.toml`: add `vitalis-defend` (to run the
+      new signal through `ThreatClassifier` in the demo).
+- [x] `examples/feral-scavenger/src/main.rs`: update the existing
+      `run_negotiate()` for the new signatures (thread `now`, call
+      `receive_accept`); add the gossip + relay demo.
+- [x] `examples/feral-scavenger/tests/scenario.rs`: update for the new
+      signatures.
+- [x] Final pass: `cargo fmt --all`, `cargo clippy --workspace --all-targets
+      -- -D warnings`, `cargo test --workspace` all green.
+- [x] Add a dated Session Notes entry once this phase lands.
 
 ---
 
 ## Session Notes
 
 *(dated entries added here as work actually happens)*
+
+### 2026-08-07 — Phase 8 reputation deepening (direct + indirect reciprocity)
+
+Implemented the Phase 8 reputation deepening across `vitalis-negotiate`,
+`vitalis-defend`, `vitalis-drive`, and `feral-scavenger`, and reconciled the
+todo.md checkboxes with the (already largely-implemented) code:
+
+- **vitalis-negotiate**: the reputation model is decayed Beta-reputation split
+  into a *direct* pool (the only pool that can blacklist) and a *hearsay* pool
+  keyed by original witness (so multi-path relays dedup). `sweep_timeouts(now,
+  timeout)` auto-detects broken bargains; `report_reputation` /
+  `receive_reputation_report` do one-hop gossip; `relay_reputation_report`
+  forwards with `RelayedReputationReport { subject, origin, hops, provenance }`,
+  carrying the origin's hop-1 signature as provenance and capping at
+  `MAX_HOPS`. `receive_accept` binds the accepter's identity to a proposed nonce
+  (closes the forged-credit gap), and `receive_settle` scores delivery via
+  `fulfillment_ratio` so under-delivery is graduated bad faith. Heaps of new
+  tests: forged-settle, partial-delivery, auto-timeout, decay/forgiveness,
+  gossip-without-direct-trade, gossip-from-blacklisted-reporter, self-report
+  rejection, stale-report rejection, relay provenance/hop-cap/blacklisted-relayer
+  /tampered-subject, multi-path dedup, distinct-witness count.
+- **vitalis-defend**: `ThreatClassifier` gains the `"BROKEN_BARGAIN"` signal →
+  `ThreatClass::HostilePeer` / `Severity::Warning` (warning, not escape-worthy),
+  with a test.
+- **vitalis-drive**: `Negotiator` is now constructed alongside `Defender`; each
+  cycle `sweep_timeouts` is fed through the same `ThreatSignal`/`classify`
+  pipeline, so a confirmed broken bargain is logged as a hostile-peer warning
+  (closes part of Phase 7 P1.2/P1.3). Added `negotiate_timeout` to
+  `DriveConfig` (default 5) and wired it into `main.rs`/`resolve_config`.
+- **feral-scavenger**: `run_negotiate` updated for the new `now`/`receive_accept`
+  signatures (full two-way barter), `Cargo.toml` gains `vitalis-defend`, and a
+  new `run_gossip` demo shows a dishonest peer being reported, trust dropping on
+  hearsay (further with corroboration) without hearsay ever blacklisting, plus a
+  multi-hop relay through the defend classifier. `tests/scenario.rs` updated.
+- Also fixed three pre-existing `cargo doc --no-deps -D warnings` failures (private
+  intra-doc links to `fulfillment_ratio`, `MAX_HOPS`, `ReputationRecord`) so the
+  doc CI gate is genuinely green.
+
+**CI gate is green**: `cargo fmt --all -- --check`, `cargo clippy --workspace
+--all-targets -- -D warnings`, `cargo test --workspace`, `cargo doc --workspace
+--no-deps` (no warnings), and `cargo deny check` all pass.
 
 ### 2026-08-07 — Phase 7 security hardening, honesty fixes & adoption polish
 

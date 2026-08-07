@@ -45,6 +45,19 @@ fn unknown_signal_is_no_threat() {
 }
 
 #[test]
+fn broken_bargain_classifies_hostile_peer_warning() {
+    use vitalis_core::{Severity, ThreatSignal};
+    let sig = ThreatSignal {
+        source: "negotiate".into(),
+        code: "BROKEN_BARGAIN".into(),
+        message: "peer stiffed a counterparty".into(),
+    };
+    let threat = ThreatClassifier::classify_signal(&sig).expect("broken bargain is a threat");
+    assert_eq!(threat.class(), ThreatClass::HostilePeer);
+    assert_eq!(threat.severity(), Severity::Warning);
+}
+
+#[test]
 fn defend_trait_classifies_oom() {
     let d = Defender::new().unwrap();
     let ev = d

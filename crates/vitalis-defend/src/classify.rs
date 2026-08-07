@@ -42,6 +42,11 @@ impl ThreatClassifier {
                 Severity::Warning,
                 format!("hostile peer: {}", signal.message),
             ),
+            "BROKEN_BARGAIN" => (
+                ThreatClass::HostilePeer,
+                Severity::Warning,
+                format!("broken bargain: {}", signal.message),
+            ),
             _ => return None,
         };
         Some(Threat::new(class, severity, detail))

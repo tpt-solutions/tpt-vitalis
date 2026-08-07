@@ -78,6 +78,29 @@ the default build and the MSRV-1.85 CI remain unaffected.
 - Docs: corrected the workspace crate count, the `drive` loop step order, and
   the survival-profile link; threat model now describes real enforcement.
 
+### Reputation deepening (Phase 8)
+- `vitalis-negotiate`: reputation is now a decayed Beta-reputation model split
+  into a **direct** pool (the only pool that can blacklist) and a **hearsay**
+  pool keyed by original witness — so gossip moves the continuous trust score but
+  can never blacklist on hearsay alone. `sweep_timeouts(now, timeout)` auto-detects
+  broken bargains; `report_reputation` / `receive_reputation_report` do one-hop
+  gossip; `relay_reputation_report` forwards claims with `RelayedReputationReport
+  { subject, origin, hops, provenance }`, carrying the origin's hop-1 signature as
+  provenance and bounding propagation at `MAX_HOPS`. Per-hop trust discount and a
+  configurable reputation half-life give proportionality and forgiveness.
+- `vitalis-negotiate`: `receive_accept` binds the accepter's identity to a
+  proposed nonce (closes the forged-credit gap where any signer could settle an
+  observed nonce), and `receive_settle` now scores delivery via `fulfillment_ratio`
+  so an under-delivery is graduated bad faith rather than a silent full success.
+- `vitalis-defend`: `ThreatClassifier` gains a `"BROKEN_BARGAIN"` signal
+  (`ThreatClass::HostilePeer` / `Severity::Warning`).
+- `vitalis-drive`: a `Negotiator` is now constructed alongside the `Defender` and
+  fed through the same `ThreatSignal`/`classify` pipeline each cycle
+  (`negotiate_timeout` config, default 5).
+- `examples/feral-scavenger`: `run_negotiate` updated for the new signatures and
+  a new `run_gossip` demo shows hearsay-driven distrust, corroboration, and a
+  multi-hop relay through the defend classifier.
+
 ### Notes
 - `vitalis-sense` peer mesh remains the simulated `SimulatedMesh` (swap-in
   point for a real libp2p transport); RISC-V/ESP32 hardware validation and

@@ -32,14 +32,27 @@ pub enum BarterMessage {
         nonce: u64,
     },
     /// A signed, gossiped opinion about a third party (`subject`), built only
-    /// from the sender's own *direct* trade history with them. There is no
-    /// way to relay a report you were told by someone else — a receiver can
-    /// only ever be one hop from the original direct experience.
+    /// from the sender's own *direct* trade history with them. This is
+    /// "direct gossip" — the sender is the original witness.
     ReputationReport {
         subject: AgentId,
         trust: f64,
         dings: u32,
         as_of_cycle: u64,
+    },
+    /// "Indirect gossip": forwarding a [`BarterMessage::ReputationReport`]
+    /// this agent did not itself witness. `provenance` is the raw bytes of
+    /// the *original* hop-1 [`SignedMessage`] (signed by `origin`), carried
+    /// unchanged through every relay — trust in the claim is anchored to
+    /// `origin`'s own signature, not to whatever an intermediate relayer
+    /// claims. `hops` counts the distance from `origin` to whoever signed
+    /// this outer message; a receiver bounds how far it will trust a claim
+    /// that has traveled by capping `hops`.
+    RelayedReputationReport {
+        subject: AgentId,
+        origin: AgentId,
+        hops: u32,
+        provenance: Vec<u8>,
     },
 }
 
