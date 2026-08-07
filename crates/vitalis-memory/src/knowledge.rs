@@ -11,7 +11,7 @@ use std::path::Path;
 use vitalis_core::{Error, Result};
 
 /// The current knowledge schema version. Bump when the on-disk shape changes
-/// and add a migration arm in [`migrate`].
+/// and add a migration arm in `migrate`.
 pub const CURRENT_SCHEMA_VERSION: u32 = 2;
 
 /// Category of a knowledge blob.

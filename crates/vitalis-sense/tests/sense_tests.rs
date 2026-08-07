@@ -4,6 +4,8 @@ use std::sync::{Arc, Mutex};
 use vitalis_core::traits::Sense;
 use vitalis_core::{AgentId, Capability, CapabilityScope, Resource, ResourceKind};
 use vitalis_sense::host::SimulatedHost;
+#[cfg(target_os = "linux")]
+use vitalis_sense::host::{HostProbe, ProcfsHost};
 use vitalis_sense::mesh::{Mesh, SimulatedMesh};
 use vitalis_sense::sense::LocalSensor;
 
@@ -71,4 +73,26 @@ fn leave_removes_peer() {
     assert!(mesh.query_peer(&id).unwrap().is_some());
     mesh.leave(&id).unwrap();
     assert!(mesh.query_peer(&id).unwrap().is_none());
+}
+
+/// Real Linux host probe reads `/proc` and sysfs (runs only on Linux CI).
+#[cfg(target_os = "linux")]
+#[test]
+fn procfs_host_reads_real_resources() {
+    let probe = ProcfsHost::new();
+    let resources = probe.read().unwrap();
+    // Four canonical kinds, all finite and non-negative.
+    assert_eq!(resources.len(), 4);
+    for r in &resources {
+        assert!(
+            r.is_valid(),
+            "resource {r:?} should be finite & non-negative"
+        );
+    }
+    // Memory from /proc/meminfo should be a real, positive amount.
+    let mem = resources
+        .iter()
+        .find(|r| r.kind() == ResourceKind::Storage)
+        .unwrap();
+    assert!(mem.quantity() > 0.0);
 }

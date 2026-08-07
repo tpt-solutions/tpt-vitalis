@@ -55,6 +55,29 @@ the default build and the MSRV-1.85 CI remain unaffected.
   3 WASM sandbox" goal).
 - `vitalis-drive`: `harden` / `wasm-sandbox` feature flags wiring the above in.
 
+### Security
+- `vitalis-replicate`: checkpoints are now *verified* on restore, not just
+  signed — an unsigned or failed-verification checkpoint is rejected. A
+  `Signer`/`Verifier` can be wired into `Replicator` (P0.1).
+- `vitalis-defend`: signing identities are now bound to `AgentId` via
+  trust-on-first-use (TOFU) key pinning (`verify_checkpoint_for`,
+  `BoundVerifier`), so a forged/swapped signing identity is caught (P0.2).
+- `vitalis-negotiate`: `receive_settle` now requires a recognized, unconsumed
+  nonce and rejects replays (P0.3); a per-peer pending-offer cap bounds
+  abuse/spam (P0.4); messages and checkpoints enforce size guards before
+  deserialization (P0.5).
+- `vitalis-adapt`: split into independent `verify()` / `apply()` / `rollback()`
+  with caller-supplied hooks; `propose()` is a convenience wrapper (P1.1).
+
+### Changed
+- `vitalis-drive`: wires the real `Defender` into `Replicator` (sign + verify),
+  wires `vitalis-negotiate` into the `feral-scavenger` demo (P1.2), and adds an
+  opt-in `--real-sensors` flag to use the Linux host backends (P1.3).
+- `vitalis-adapt`: `AdaptEngine` uses the real `WasmSandbox` boundary when the
+  `wasm-sandbox` feature is enabled.
+- Docs: corrected the workspace crate count, the `drive` loop step order, and
+  the survival-profile link; threat model now describes real enforcement.
+
 ### Notes
 - `vitalis-sense` peer mesh remains the simulated `SimulatedMesh` (swap-in
   point for a real libp2p transport); RISC-V/ESP32 hardware validation and

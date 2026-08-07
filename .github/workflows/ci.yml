@@ -38,6 +38,11 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      - name: Documentation
+        run: cargo doc --workspace --no-deps
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
       - name: Install cargo-deny
         uses: cargo-bins/cargo-binstall@main
 
@@ -61,5 +66,5 @@ jobs:
           targets: riscv32imc-unknown-none-elf, thumbv7em-none-eabihf
       - name: Build core for embedded targets
         run: |
-          cargo build -p vitalis-core --target riscv32imc-unknown-none-elf || true
-          cargo build -p vitalis-core --target thumbv7em-none-eabihf || true
+          cargo build -p vitalis-core --target riscv32imc-unknown-none-elf
+          cargo build -p vitalis-core --target thumbv7em-none-eabihf

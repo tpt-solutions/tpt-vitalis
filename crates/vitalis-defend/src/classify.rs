@@ -1,11 +1,12 @@
 //! Threat classification: low-level signals → [`ThreatEvent`]s.
 
-use crate::integrity::{now_secs, CheckpointSeal, KeyPair};
+use crate::integrity::{now_secs, verify_checkpoint_for, CheckpointSeal, KeyPair};
 use crate::signal::TerminationSignal;
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use vitalis_core::events::ThreatEvent;
 use vitalis_core::traits::{Defend, Signer, Verifier};
-use vitalis_core::{Result, Severity, Threat, ThreatClass, ThreatSignal};
+use vitalis_core::{AgentId, Result, Severity, Threat, ThreatClass, ThreatSignal};
 
 /// Pure mapping from a [`ThreatSignal`] to a classified [`Threat`].
 #[derive(Debug, Clone, Copy, Default)]
@@ -47,7 +48,8 @@ impl ThreatClassifier {
     }
 }
 
-/// The agent's immune system: classifies threats and signs checkpoints.
+/// The agent's immune system: classifies threats and signs/verifies
+/// checkpoints with identity-bound (TOFU) key pinning.
 ///
 /// Cheaply [`Clone`] (the key material is `Arc`-shared) so the same signing
 /// identity can be handed to multiple consumers (e.g. wired into a
@@ -56,12 +58,19 @@ impl ThreatClassifier {
 #[derive(Clone)]
 pub struct Defender {
     keys: Arc<KeyPair>,
+    /// Trust-on-first-use pins: `AgentId` → public key. A checkpoint seal is
+    /// only accepted if its embedded public key matches the pinned key for the
+    /// checkpoint's `AgentId` (first sight pins it). This is what makes a
+    /// forged-or-swapped signing identity detectable rather than silently
+    /// trusted.
+    pins: Arc<Mutex<HashMap<AgentId, Vec<u8>>>>,
 }
 
 impl Defender {
     pub fn new() -> Result<Self> {
         Ok(Self {
             keys: Arc::new(KeyPair::generate()?),
+            pins: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -75,9 +84,15 @@ impl Defender {
         self.keys.seal(data)
     }
 
-    /// Verify a seal over `data` using this agent's key.
+    /// Verify a seal over `data` using this agent's key (no identity binding).
     pub fn verify(&self, seal: &crate::CheckpointSeal, data: &[u8]) -> bool {
         crate::verify_checkpoint(seal, data)
+    }
+
+    /// Verify a seal over `data`, binding it to `agent_id` via TOFU key
+    /// pinning (see [`verify_checkpoint_for`]).
+    pub fn verify_for(&self, agent_id: AgentId, seal: &crate::CheckpointSeal, data: &[u8]) -> bool {
+        verify_checkpoint_for(&self.pins, agent_id, seal, data)
     }
 }
 
@@ -108,6 +123,30 @@ impl Verifier for Defender {
     fn verify(&self, data: &[u8], seal: &[u8]) -> bool {
         match postcard::from_bytes::<CheckpointSeal>(seal) {
             Ok(parsed) => crate::verify_checkpoint(&parsed, data),
+            Err(_) => false,
+        }
+    }
+}
+
+/// A [`Verifier`] that binds a checkpoint seal to a specific [`AgentId`] via
+/// the `Defender`'s trust-on-first-use key pinning. Use this when wiring a
+/// `Defender` into a `vitalis-replicate::Replicator` so that a checkpoint
+/// restored for the wrong (or swapped) signing identity is rejected.
+pub struct BoundVerifier {
+    inner: Arc<Defender>,
+    agent: AgentId,
+}
+
+impl BoundVerifier {
+    pub fn new(inner: Arc<Defender>, agent: AgentId) -> Self {
+        Self { inner, agent }
+    }
+}
+
+impl Verifier for BoundVerifier {
+    fn verify(&self, data: &[u8], seal: &[u8]) -> bool {
+        match postcard::from_bytes::<CheckpointSeal>(seal) {
+            Ok(parsed) => self.inner.verify_for(self.agent, &parsed, data),
             Err(_) => false,
         }
     }

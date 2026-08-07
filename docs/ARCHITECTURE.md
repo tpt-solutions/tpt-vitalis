@@ -1,6 +1,7 @@
 # Vitalis Architecture
 
-Vitalis is a 7-crate Rust workspace plus a `drive` app and a `feral-scavenger`
+Vitalis is an 8-crate Rust workspace — seven survival-capability crates plus the
+shared `vitalis-core` — composed by a `drive` app with a `feral-scavenger`
 example. It is the survival layer beneath an agent's intelligence: sense,
 metabolize, remember, replicate, defend, adapt, negotiate.
 
@@ -36,18 +37,22 @@ Rules (see `AGENTS.md` / `CLAUDE.md`):
 
 ## The survival loop (`drive`)
 
-Each cycle the `drive` loop performs: **sense → metabolize → defend → decide →
-act → persist**.
+Each cycle the `drive` loop performs: **sense → metabolize → decide → defend →
+act** (see `apps/vitalis-drive/src/loop_.rs`).
 
 - **sense** (`vitalis-sense`): read host resources + discover peers/mesh.
 - **metabolize** (`vitalis-metabolism`): update the ledger, derive an energy
   fraction, set the cognition throttle, enforce the host safety ceiling.
+- **decide**: the energy fraction drives the cognition throttle; if energy is
+  critically low the next step escalates to an escape-worthy threat.
 - **defend** (`vitalis-defend`): classify threat signals into `ThreatEvent`s and
-  sign checkpoints for integrity.
-- **decide/act**: if a `ThreatEvent` is escape-worthy (or energy is critically
-  low), checkpoint + replicate (+ migrate) via `vitalis-replicate`.
+  sign/verify checkpoints for integrity.
+- **act**: spend energy; when a `ThreatEvent` is escape-worthy (or energy is
+  critically low), checkpoint + replicate (+ migrate) via `vitalis-replicate`.
 - **persist** (`vitalis-memory`): durable identity/state/knowledge survives
-  restart and migration (goals **G1–G3**).
+  restart and migration (goals **G1–G3**); note persistence is *event-driven* —
+  it happens when a checkpoint is captured under pressure or on migration, not
+  unconditionally every cycle.
 
 ## Transport / backend choices
 

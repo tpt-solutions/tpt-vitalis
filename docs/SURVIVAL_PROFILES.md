@@ -2,7 +2,7 @@
 
 Vitalis is the *same* stack, weighted differently per agent class (spec §6).
 Each profile biases the `drive` loop's cycle via
-[`SurvivalProfileConfig`](./crates/vitalis-core/src/types.rs) and selects
+[`SurvivalProfileConfig`](../crates/vitalis-core/src/types.rs) and selects
 sensible defaults in the capability crates.
 
 ## Apex

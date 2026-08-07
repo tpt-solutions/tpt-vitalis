@@ -22,11 +22,11 @@ This keeps the immune system decoupled from reproduction.
 
 | Threat | Detection | Response |
 |--------|-----------|----------|
-| Checkpoint tampering | Signature verification on load | Reject blob; force re-checkpoint from a known-good copy |
+| Checkpoint tampering | Signature verification on load; the `Replicator` rejects any checkpoint whose seal is missing or fails verification, and a `BoundVerifier` binds the seal to the expected `AgentId` via trust-on-first-use (TOFU) key pinning (P0.1 + P0.2) | Reject blob; force re-checkpoint from a known-good copy |
 | SIGTERM / SIGKILL | Signal simulation / OS hook (brain tier) | Critical `ThreatEvent` → replicate + migrate |
 | OOM-killer | cgroup event / signal | Critical `ThreatEvent` → replicate + migrate |
 | Resource starvation | Metabolism ledger below safe floor | Warning → Critical escalation → replicate |
-| Hostile peer (spoof/broken bargain) | Negotiation layer signal | Warning; penalize peer (see `vitalis-negotiate`) |
+| Hostile peer (spoof/broken bargain) | Negotiation-layer signal; forged identities are rejected once a peer's key is pinned (TOFU, P0.2), captured `Settle`s cannot be replayed (P0.3), and a per-peer pending-offer cap bounds abuse (P0.4) | Warning; penalize peer (see `vitalis-negotiate`) |
 
 ## What it does NOT protect against
 

@@ -8,6 +8,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+readme.workspace = true
 keywords = ["survival", "agent", "vitalis", "drive"]
 categories = ["command-line-utilities"]
 
@@ -27,7 +28,8 @@ serde.workspace = true
 serde_json.workspace = true
 clap.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+toml.workspace = true
 
 # `adapt` is OFF by default. The drive only composes vitalis-adapt when this
 # feature is explicitly enabled — mirroring the crate's own off-by-default gate.

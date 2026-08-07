@@ -8,6 +8,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+readme.workspace = true
 keywords = ["survival", "demo", "vitalis", "feral"]
 categories = ["examples"]
 
@@ -20,6 +21,7 @@ vitalis-core.workspace = true
 vitalis-sense.workspace = true
 vitalis-metabolism.workspace = true
 vitalis-replicate.workspace = true
+vitalis-negotiate.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

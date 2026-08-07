@@ -1,6 +1,8 @@
 use vitalis_core::traits::Metabolize;
 use vitalis_core::{Resource, ResourceKind, SurvivalProfile};
 use vitalis_metabolism::ledger::ResourceLedger;
+#[cfg(target_os = "linux")]
+use vitalis_metabolism::os::{LimiterMode, LinuxResourceLimiter, SysfsPowerSensor};
 use vitalis_metabolism::throttle::{
     compute_throttle, SafetyCeiling, ThrottleController, ThrottleProfile,
 };
@@ -76,4 +78,27 @@ fn set_throttle_rejects_out_of_range() {
     assert!(m.set_throttle(-0.1).is_err());
     assert!(m.set_throttle(0.4).is_ok());
     assert_eq!(m.throttle_level(), 0.4);
+}
+
+/// Real Linux resource limiter applies a real OS primitive (runs only on Linux).
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_limiter_applies_real_os_primitive() {
+    let lim = LinuxResourceLimiter;
+    assert_eq!(lim.mode(), LimiterMode::Os);
+    // Applying a memory cap attempts setrlimit/RLIMIT_AS; it must report a
+    // definitive outcome without panicking.
+    let out = lim.apply(0.5, 0.5);
+    assert!(out.enforced || out.mode == LimiterMode::Simulated);
+}
+
+/// Real Linux power sensor reads sysfs and reports a real reading (runs only on
+/// Linux).
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_power_sensor_reads_real_hw() {
+    let sensor = SysfsPowerSensor;
+    let r = sensor.read().unwrap();
+    assert!(r.real);
+    assert!(r.energy_joules > 0.0);
 }

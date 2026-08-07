@@ -80,3 +80,48 @@ fn identities_are_distinct() {
     let b = Negotiator::new(&[compute(1.0)]).unwrap();
     assert_ne!(a.id(), b.id());
 }
+
+/// P0.3: a `Settle` whose nonce was already consumed (replayed) is rejected, so
+/// a captured settle cannot be replayed to re-credit the ledger.
+#[test]
+fn replayed_settle_is_rejected() {
+    let mut a = Negotiator::new(&[compute(10.0)]).unwrap();
+    let mut b = Negotiator::new(&[storage(100.0)]).unwrap();
+
+    let offer = a.propose_offer(compute(10.0), storage(50.0));
+    let nonce = match offer.message().unwrap() {
+        BarterMessage::Offer { nonce, .. } => nonce,
+        _ => panic!("offer"),
+    };
+    let _ = b.receive_offer(&offer).unwrap().expect("B accepts");
+    let b_settle = b.deliver(storage(50.0), nonce).unwrap();
+    a.receive_settle(&b_settle).unwrap();
+
+    // The same settle arrives again: the nonce was already consumed, so reject.
+    assert!(a.receive_settle(&b_settle).is_err());
+}
+
+/// P0.2: a forged message claiming another agent's identity (but signed by a
+/// different key) is rejected once the real peer's key is pinned (TOFU).
+#[test]
+fn spoofed_identity_is_rejected() {
+    let a = Negotiator::new(&[compute(10.0)]).unwrap();
+    let mut b = Negotiator::new(&[storage(100.0)]).unwrap();
+    let mut attacker = Negotiator::new(&[storage(100.0)]).unwrap();
+
+    // B first sees a legitimate message from A, pinning A's key.
+    let offer = a.propose_offer(compute(10.0), storage(50.0));
+    assert!(b.receive_offer(&offer).is_ok());
+
+    // Attacker forges a settle that claims A's identity but is signed by the
+    // attacker's own key, and tries to deliver it to B.
+    let forged = {
+        let mut s = attacker.deliver(storage(50.0), 12345).unwrap();
+        // Lie about who signed it.
+        s.signer = a.id();
+        s
+    };
+    // B must reject the forged identity (TOFU mismatch).
+    assert!(!b.verify(&forged));
+    assert!(b.receive_settle(&forged).is_err());
+}

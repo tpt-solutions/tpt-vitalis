@@ -4,8 +4,8 @@
 //!
 //! - **Integrity** — Ed25519 signing/verification of persisted checkpoints so
 //!   tampering is detectable (`ring` backend).
-//! - **Threat classification** — turns low-level [`ThreatSignal`]s into
-//!   [`ThreatEvent`]s the `drive` loop reacts to (per the layering rule,
+//! - **Threat classification** — turns low-level `ThreatSignal`s into
+//!   `ThreatEvent`s the `drive` loop reacts to (per the layering rule,
 //!   `defend` reaches `replicate` *only* through these events — never a direct
 //!   dependency).
 //! - **Anti-termination** — detects termination-style signals (OOM, SIGKILL,
@@ -24,7 +24,7 @@ pub mod integrity;
 pub mod signal;
 pub mod wasm;
 
-pub use classify::{Defender, ThreatClassifier};
+pub use classify::{BoundVerifier, Defender, ThreatClassifier};
 pub use harden::{apply_hardening, HardeningMode, HardeningReport};
 pub use integrity::{verify_checkpoint, CheckpointSeal, KeyPair};
 pub use signal::{simulate_termination, TerminationSignal};

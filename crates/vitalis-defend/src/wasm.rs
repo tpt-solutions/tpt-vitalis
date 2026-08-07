@@ -2,7 +2,7 @@
 //!
 //! The reference implementation is an in-process [`NullSandbox`] (permits
 //! everything; the real boundary is the caller's policy). With the
-//! `wasm-sandbox` feature, [`WasmSandbox`] executes capability decisions inside
+//! `wasm-sandbox` feature, `WasmSandbox` executes capability decisions inside
 //! a real `wasmtime` guest — this is the WASM/WASI runtime referenced in the
 //! design doc, kept behind a feature so the default build stays dependency-light.
 

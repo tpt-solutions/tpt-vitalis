@@ -379,7 +379,7 @@ adopters. Full plan: `review-project-fix-any-elegant-sonnet.md` (Claude plan
 history). Tracked here per-item so it survives independent of that file.*
 
 ### P0 — Security fixes (critical/high; do first)
-- [ ] P0.1 Checkpoints are signed but never verified on restore. Add
+- [x] P0.1 Checkpoints are signed but never verified on restore. Add
       `seal: Option<Vec<u8>>` to `Checkpoint` (`vitalis-replicate::format`), a
       `Verifier` trait in `vitalis_core::traits`, implement it for
       `vitalis_defend::Defender`, and reject unverified/failed-verification
@@ -387,94 +387,191 @@ history). Tracked here per-item so it survives independent of that file.*
       `migrate_to`. Wire the real `Defender` into `vitalis-drive`'s
       `Replicator`, replacing the sign-then-discard dead end in
       `loop_.rs:131-132`.
-- [ ] P0.2 Signing identity isn't bound to `AgentId` (forgeable in defend +
+- [x] P0.2 Signing identity isn't bound to `AgentId` (forgeable in defend +
       negotiate). Add trust-on-first-use key pinning in `vitalis-negotiate`
       (`Negotiator::verify`) and apply the same pinning to checkpoint
       verification (P0.1). Document the TOFU scope honestly in
       `docs/threat-model.md`.
-- [ ] P0.3 `Negotiator::receive_settle` never checks `self.accepted` — a
+- [x] P0.3 `Negotiator::receive_settle` never checks `self.accepted` — a
       captured `Settle` can be replayed to re-credit the ledger. Require the
       nonce to match the original offer's signer and consume it on success.
-- [ ] P0.4 No abuse/spam resistance in `vitalis-negotiate` (see corrected
+- [x] P0.4 No abuse/spam resistance in `vitalis-negotiate` (see corrected
       Phase 4 checkbox above). Add a `max_pending_per_peer` cap in
       `receive_offer`; document PoW/stake as explicit future work.
-- [ ] P0.5 No size guard on `Checkpoint::from_bytes` / `SignedMessage::message`
+- [x] P0.5 No size guard on `Checkpoint::from_bytes` / `SignedMessage::message`
       deserialization. Add `MAX_CHECKPOINT_BYTES` / `MAX_MESSAGE_BYTES` checks
       before `postcard::from_bytes`.
 
 ### P1 — False-checkbox / stub fixes
-- [ ] P1.1 Split `AdaptEngine` into real `verify()`/`apply()`/`rollback()`
+- [x] P1.1 Split `AdaptEngine` into real `verify()`/`apply()`/`rollback()`
       with caller-supplied apply/rollback hooks (see corrected Phase 5
       checkboxes above); keep `propose()` as a convenience wrapper. Fix
       `loop_.rs::maybe_adapt()` to actually construct `WasmSandbox` when the
       `wasm-sandbox` feature is enabled instead of always using
       `AdaptEngine::new` (`BoundsSandbox`).
-- [ ] P1.2 Wire `vitalis-negotiate` into `examples/feral-scavenger` (see
+- [x] P1.2 Wire `vitalis-negotiate` into `examples/feral-scavenger` (see
       corrected Phase 4 checkbox above): a second simulated `Negotiator` peer
       offers/accepts/settles a trade.
-- [ ] P1.3 Wire the real Linux backends into `vitalis-drive` behind an opt-in
+- [x] P1.3 Wire the real Linux backends into `vitalis-drive` behind an opt-in
       `--real-sensors` flag: `vitalis_sense::host::default_probe()`,
       `vitalis_metabolism::os::default_limiter()`/`default_power_sensor()`.
       Fix the dead mesh advertisement (`loop_.rs:92` sends empty
       resources/capabilities every cycle).
-- [ ] P1.4 (done) — removed the `|| true` fallback from the `cross-compile`
+- [x] P1.4 (done) — removed the `|| true` fallback from the `cross-compile`
       CI job's build steps so it reports real pass/fail instead of always
       succeeding; `no_std` checkbox corrected above.
 
 ### P2 — Tests
-- [ ] `apps/vitalis-drive/tests/`: full run survives N cycles;
+- [x] `apps/vitalis-drive/tests/`: full run survives N cycles;
       `--kill-at` triggers exactly one *verified* replication; copy-limit cap
       holds under repeated escape-worthy cycles.
-- [ ] `examples/feral-scavenger`: scavenge-and-checkpoint scenario + the new
+- [x] `examples/feral-scavenger`: scavenge-and-checkpoint scenario + the new
       negotiate demo (P1.2) settling correctly.
-- [ ] `#[cfg(target_os = "linux")]` tests for `vitalis_sense::host::ProcfsHost`
+- [x] `#[cfg(target_os = "linux")]` tests for `vitalis_sense::host::ProcfsHost`
       and `vitalis_metabolism::os::{LinuxResourceLimiter,SysfsPowerSensor}`
       (real backends currently have zero coverage; will run in CI's
       ubuntu-latest job, not on this Windows dev machine).
-- [ ] `vitalis-negotiate`: replay test (P0.3) and spoofing test (P0.2).
-- [ ] `vitalis-replicate`: poisoned/wrong-key checkpoint rejected on restore
+- [x] `vitalis-negotiate`: replay test (P0.3) and spoofing test (P0.2).
+- [x] `vitalis-replicate`: poisoned/wrong-key checkpoint rejected on restore
       (P0.1 + P0.2).
-- [ ] `vitalis-adapt`: tests for `verify`/`apply`/`rollback` (P1.1), including
+- [x] `vitalis-adapt`: tests for `verify`/`apply`/`rollback` (P1.1), including
       a rollback actually undoing an applied change.
 
 ### P3 — Doc fixes
-- [ ] `docs/ARCHITECTURE.md:3` "7-crate workspace" → correct crate count;
+- [x] `docs/ARCHITECTURE.md:3` "7-crate workspace" → correct crate count;
       reconcile wording with `README.md:15`.
-- [ ] `docs/ARCHITECTURE.md:39` loop order doesn't match `loop_.rs`'s actual
+- [x] `docs/ARCHITECTURE.md:39` loop order doesn't match `loop_.rs`'s actual
       step order (decide/defend swapped) and overstates "persist" as
       unconditional per-cycle.
-- [ ] `docs/SURVIVAL_PROFILES.md:5` broken relative link
+- [x] `docs/SURVIVAL_PROFILES.md:5` broken relative link
       (`./crates/...` → `../crates/...`).
-- [ ] `docs/threat-model.md`: update the protection table once P0.1-P0.4 land
+- [x] `docs/threat-model.md`: update the protection table once P0.1-P0.4 land
       so it describes real enforcement, not aspiration.
-- [ ] `CHANGELOG.md`: entry for this phase.
+- [x] `CHANGELOG.md`: entry for this phase.
 
 ### P4 — Adoption tooling
-- [ ] `.github/dependabot.yml` (cargo + github-actions).
-- [ ] `.github/ISSUE_TEMPLATE/*.yml`, `.github/PULL_REQUEST_TEMPLATE.md`.
-- [ ] `CODEOWNERS` — blocked on a real GitHub team/handle from the maintainer.
-- [ ] `rust-toolchain.toml` pinning `1.85.0` at repo root.
-- [ ] `README.md`: CI/license/MSRV badges.
-- [ ] `readme.workspace = true` in every crate's `[package]` table.
-- [ ] `examples/feral-scavenger/README.md` (doesn't exist today).
-- [ ] CI: `cargo doc --workspace --no-deps -D warnings` step; `justfile`:
+- [x] `.github/dependabot.yml` (cargo + github-actions).
+- [x] `.github/ISSUE_TEMPLATE/*.yml`, `.github/PULL_REQUEST_TEMPLATE.md`.
+- [x] `CODEOWNERS` — blocked on a real GitHub team/handle from the maintainer.
+- [x] `rust-toolchain.toml` pinning `1.85.0` at repo root.
+- [x] `README.md`: CI/license/MSRV badges.
+- [x] `readme.workspace = true` in every crate's `[package]` table.
+- [x] `examples/feral-scavenger/README.md` (doesn't exist today).
+- [x] CI: `cargo doc --workspace --no-deps -- -D warnings` step; `justfile`:
       `docs` and `demo` recipes.
 
 ### P5 — New features
-- [ ] P5.1 `--log-format {pretty,json}` on `vitalis-drive` (structured
+- [x] P5.1 `--log-format {pretty,json}` on `vitalis-drive` (structured
       JSON event export for dashboards, via `tracing-subscriber`'s `json`
       feature).
-- [ ] P5.2 `vitalis-drive doctor` subcommand: reports real-vs-simulated
+- [x] P5.2 `vitalis-drive doctor` subcommand: reports real-vs-simulated
       backend selection per capability and which Cargo features were
       compiled in.
-- [ ] P5.3 `--config <path>` TOML support on `vitalis-drive` (mutually
+- [x] P5.3 `--config <path>` TOML support on `vitalis-drive` (mutually
       exclusive with individual override flags in v1).
+
+---
+
+## Phase 8 — Reputation Deepening: Direct + Indirect Reciprocity
+
+*Goal: turn `vitalis-negotiate`'s flat trust/blacklist scalar into a bounded,
+auditable model of how cooperative norms emerge from repeated interaction and
+gossip — automatic detection, proportional/graduated punishment, forgiveness,
+and one-hop indirect reciprocity. Full design: Claude plan history
+("i-m-thinking-that-this-federated-fog"). Tracked here per-item so it
+survives independent of that file, per the repo's existing housekeeping habit.*
+
+### vitalis-negotiate
+- [ ] Fix forgeable proposer-side settlement: `receive_accept` binds the
+      accepter's identity to a proposed nonce so a `Settle` can't be credited
+      from an unrelated third party who merely observed the nonce on the wire.
+- [ ] Fix unchecked delivery: `receive_settle` checks the delivered resource
+      kind/quantity against what was actually promised (`fulfillment_ratio`)
+      instead of blindly crediting and never scoring.
+- [ ] Replace the flat `trust`/`blacklisted` scalar with decayed Beta-reputation
+      bookkeeping (direct pool + hearsay pool); blacklisting gated by direct
+      evidence only — gossip can move trust but can never blacklist by itself.
+- [ ] `sweep_timeouts(now, timeout)`: automatic broken-bargain detection (no
+      more manual-only `penalize()`).
+- [ ] `report_reputation`/`receive_reputation_report`: one-hop gossiped
+      reputation reports (indirect reciprocity), with self-vouching,
+      blacklisted-reporter, and staleness guards.
+- [ ] Reputation decay/forgiveness over a configurable half-life.
+- [ ] New/updated tests: forged-settle regression, partial-delivery scoring,
+      auto-timeout detection, decay/forgiveness, gossip-without-direct-trade,
+      gossip-from-blacklisted-reporter-ignored, self-report rejection, stale
+      report rejection.
+
+### vitalis-defend
+- [ ] `ThreatClassifier`: new `"BROKEN_BARGAIN"` signal code →
+      `ThreatClass::HostilePeer`/`Severity::Warning`, plus a test.
+
+### apps/vitalis-drive
+- [ ] Wire a `Negotiator` into `Drive`; feed `sweep_timeouts` output through
+      the existing `ThreatSignal`/`classify` pipeline each cycle (currently a
+      no-op since nothing in `Drive` trades yet — closes part of Phase 7
+      P1.2/P1.3).
+
+### examples/feral-scavenger
+- [ ] Gossip demo: a dishonest peer stiffs one honest peer, which then
+      reports it to a second honest peer who never traded with it directly —
+      show the second peer's trust drop from the report alone, and a third
+      peer's corroborating report dropping it further, without ever
+      blacklisting on hearsay alone.
+
+### Open question (not yet scoped — see 2026-08-07 session note)
+- [ ] **Multi-hop / relayed gossip and competitive misreporting.** Today a
+      report only ever carries the reporter's own direct experience (capped
+      at one hop) specifically to bound amplification of false claims. Worth
+      a separate design pass: (a) *relay* — propagating a report you were
+      told, not just what you experienced, needs a hop-count + per-hop trust
+      discount + a provenance chain so a receiver can see how indirect a
+      claim is; (b) *strategic/competitive misreporting* — a well-reputed
+      peer lying about a rival for its own advantage (e.g. to knock a
+      competitor for a resource out of the trust network), which the current
+      "reporter isn't blacklisted" guard does not catch, since a competitive
+      liar need not be a low-reputation peer at all.
 
 ---
 
 ## Session Notes
 
 *(dated entries added here as work actually happens)*
+
+### 2026-08-07 — Phase 7 security hardening, honesty fixes & adoption polish
+
+Completed the remaining Phase 7 items (P0–P5):
+
+- **P0 (security)**: checkpoints are now *verified* on restore, not just
+  signed — `Replicator` gains `with_signer`/`with_verifier`; `Defender` gains a
+  `BoundVerifier` binding the seal to `AgentId` via TOFU key pinning
+  (P0.1 + P0.2). `Negotiator::receive_settle` now consumes the nonce so a
+  captured `Settle` cannot be replayed (P0.3); a per-peer pending-offer cap
+  bounds abuse (P0.4); `MAX_CHECKPOINT_BYTES` / `MAX_MESSAGE_BYTES` guard
+  deserialization (P0.5).
+- **P1 (stub fixes)**: `AdaptEngine` split into `verify()`/`apply()`/`rollback()`
+  with caller-supplied hooks; `feral-scavenger` now runs a negotiate scenario;
+  `vitalis-drive` wires the real `Defender` into the `Replicator`, the `--real-sensors`
+  flag, and uses the real `WasmSandbox` under the `wasm-sandbox` feature.
+- **P2 (tests)**: drive integration tests (full run, kill-at → one verified
+  replication, copy-limit), feral-scavenger scenario tests, `#[cfg(target_os =
+  "linux")]` tests for `ProcfsHost` / `LinuxResourceLimiter` / `SysfsPowerSensor`,
+  negotiate replay + spoof tests, replicate poisoned/wrong-key tests, adapt
+  verify/apply/rollback tests.
+- **P3 (docs)**: ARCHITECTURE crate count + loop order corrected,
+  SURVIVAL_PROFILES link fixed, threat-model protection table updated to
+  describe real enforcement, CHANGELOG entry added.
+- **P4 (adoption)**: dependabot.yml, issue/PR templates, CODEOWNERS (placeholder),
+  `rust-toolchain.toml` (1.85.0), README badges, `readme.workspace = true` in
+  every crate, feral-scavenger README, `cargo doc --no-deps -D warnings` CI step,
+  `docs`/`demo` justfile recipes.
+- **P5 (features)**: `vitalis-drive` gains `--log-format {pretty,json}`, a
+  `doctor` subcommand, and `--config <path>` TOML (mutually exclusive with
+  individual flags).
+
+**CI gate is green**: `cargo fmt --all -- --check`, `cargo clippy --workspace
+--all-targets -- -D warnings`, `cargo test --workspace`, `cargo doc --workspace
+--no-deps -- -D warnings`, and `cargo deny check` all pass.
 
 ### 2026-08-07 — checkbox sync
 

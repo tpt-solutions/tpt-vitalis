@@ -1,5 +1,5 @@
 //! The sense tick: combine host probing + mesh discovery into a unified
-//! [`Snapshot`](vitalis_core::Snapshot) the `drive` loop polls each cycle.
+//! [`Snapshot`] the `drive` loop polls each cycle.
 
 use crate::host::HostProbe;
 use crate::mesh::{scavenge, Mesh, PeerAdvertisement, SimulatedMesh};

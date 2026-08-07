@@ -32,6 +32,14 @@ deny-check:
 build-all:
     cargo build --workspace --release
 
+# Build the documentation (no deps, warnings are errors).
+docs:
+    $env:RUSTDOCFLAGS="-D warnings"; cargo doc --workspace --no-deps
+
+# Run the feral-scavenger demo agent.
+demo:
+    cargo run -p feral-scavenger
+
 # Run everything CI runs locally.
-ci: fmt-check clippy test deny-check
+ci: fmt-check clippy test deny-check docs
     @echo "CI checks passed."

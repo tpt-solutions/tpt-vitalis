@@ -1,0 +1,11 @@
+# CODEOWNERS
+
+# NOTE: this file is a placeholder. The actual reviewing team/handle must be
+# supplied by the maintainer (TPT Solutions) — it was intentionally left as a
+# placeholder rather than a fabricated GitHub handle. Replace the line below
+# with a real team or user before relying on mandatory review.
+#
+# Example once a team exists:
+#   * @tpt-solutions/vitalis-maintainers
+
+* @tpt-solutions/vitalis-maintainers

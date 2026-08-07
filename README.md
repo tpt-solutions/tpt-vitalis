@@ -10,9 +10,14 @@ an agent alive in a world where nothing else is keeping it alive for it.
 
 Dual-licensed under **MIT OR Apache-2.0**. © 2026 TPT Solutions.
 
+[![CI](https://github.com/tpt-solutions/tpt-vitalis/actions/workflows/ci.yml/badge.svg)](https://github.com/tpt-solutions/tpt-vitalis/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
+[![MSRV](https://img.shields.io/badge/rust-1.85.0-blue.svg)](https://blog.rust-lang.org/2024/)
+
 ## The survival stack
 
-Seven capability crates + one orchestrating `drive` loop:
+Eight crates — seven survival-capability crates plus the shared `vitalis-core`
+— composed by the `drive` loop:
 
 ```
             ┌────────────────────────────────────────┐
@@ -109,7 +114,10 @@ reacts to (it never takes a direct `replicate` dependency). See `AGENTS.md` /
 cargo build --workspace
 
 # Run the reference agent in simulation
-cargo run -p vitalis-drive -- --profile feral
+cargo run -p vitalis-drive -- run --profile feral
+
+# Inspect backend selection and compiled-in features (no agent started)
+cargo run -p vitalis-drive -- doctor
 
 # Run the feral-scavenger demo
 cargo run -p feral-scavenger

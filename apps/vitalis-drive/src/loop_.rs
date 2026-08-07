@@ -1,16 +1,18 @@
 //! The survival goal loop: sense → decide → act → persist, forever.
 
-use serde::Serialize;
-use vitalis_core::traits::Defend;
-use vitalis_core::{AgentId, Result, SurvivalProfile};
-use vitalis_defend::{Defender, TerminationSignal};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use vitalis_core::traits::{Defend, Sense};
+use vitalis_core::{AgentId, Capability, CapabilityScope, Error, Result, SurvivalProfile};
+use vitalis_defend::{BoundVerifier, Defender, TerminationSignal};
 use vitalis_memory::{IdentityRecord, IdentityStore, MemoryStore, StateStore};
 use vitalis_metabolism::Metabolism;
 use vitalis_replicate::{ReplicationReason, Replicator};
+use vitalis_sense::mesh::SimulatedMesh;
 use vitalis_sense::sense::{LocalSensor, SenseTick};
 
 /// What profile to run as, and how much redundancy to keep.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DriveConfig {
     pub profile: SurvivalProfile,
     pub max_copies: usize,
@@ -19,11 +21,18 @@ pub struct DriveConfig {
     /// Energy spent per cognition cycle (joules).
     pub cost_per_cycle: f64,
     /// Fraction of capacity at which the agent proactively replicates.
+    #[serde(default = "default_replicate_below")]
     pub replicate_below: f64,
     /// Optional cycle at which a simulated termination signal fires (Phase 3
     /// immune-response demo). When set, the agent classifies a SIGKILL and
     /// triggers replication + "migration".
+    #[serde(default)]
     pub simulate_kill_at: Option<u64>,
+    /// Use the real host backends where available (Linux procfs/sysfs, OS
+    /// resource limiter) instead of the simulated sensor. Off by default so
+    /// the agent runs identically in CI and on constrained targets.
+    #[serde(default)]
+    pub real_sensors: bool,
 }
 
 impl Default for DriveConfig {
@@ -35,7 +44,31 @@ impl Default for DriveConfig {
             cost_per_cycle: 4_000.0,
             replicate_below: 0.4,
             simulate_kill_at: None,
+            real_sensors: false,
         }
+    }
+}
+
+/// Default fraction-of-capacity at which the agent proactively replicates.
+fn default_replicate_below() -> f64 {
+    0.4
+}
+
+/// The capability set a profile advertises on the mesh.
+fn profile_capabilities(profile: SurvivalProfile) -> Vec<Capability> {
+    match profile {
+        SurvivalProfile::Apex => vec![
+            Capability::new("replicate", CapabilityScope::Replicate),
+            Capability::new("adapt", CapabilityScope::Adapt),
+        ],
+        SurvivalProfile::Feral => vec![
+            Capability::new("replicate", CapabilityScope::Replicate),
+            Capability::new("negotiate", CapabilityScope::Negotiate),
+        ],
+        SurvivalProfile::MicroWilds => vec![
+            Capability::new("replicate", CapabilityScope::Replicate),
+            Capability::new("memory", CapabilityScope::WriteState),
+        ],
     }
 }
 
@@ -74,23 +107,77 @@ pub struct Drive {
 impl Drive {
     pub fn new(config: DriveConfig) -> Result<Self> {
         let agent_id = AgentId::new();
-        let sensor = LocalSensor::simulated(agent_id);
-        let tick = SenseTick::new(sensor);
-        let metabolism = Metabolism::new(config.profile);
-        let replicator = Replicator::new(agent_id, config.max_copies, 4, 2);
 
-        // The immune system: signs checkpoints + classifies threats.
+        // The immune system first: signs + verifies checkpoints and classifies
+        // threats. Cheaply cloneable so the same identity can both sign and
+        // verify without generating a second keypair.
         let defender = Defender::new()?;
+
+        // Sensor: real host probe on Linux when opted in, else simulated.
+        let sensor = if config.real_sensors {
+            LocalSensor::new(
+                agent_id,
+                vitalis_sense::host::default_probe(),
+                Box::new(SimulatedMesh::new()),
+            )
+        } else {
+            LocalSensor::simulated(agent_id)
+        };
+        let tick = SenseTick::new(sensor);
+
+        let metabolism = Metabolism::new(config.profile);
+
+        let mut replicator = Replicator::new(agent_id, config.max_copies, 4, 2);
+        // Wire the real defender in: sign captures, and *reject* any restore
+        // whose seal fails verification or is unsigned (P0.1).
+        replicator.with_signer(Box::new(defender.clone()));
+        replicator.with_verifier(Box::new(BoundVerifier::new(
+            Arc::new(defender.clone()),
+            agent_id,
+        )));
 
         // Persist identity so the agent can re-establish who it is on restart.
         let memory: MemoryStore = MemoryStore::in_memory()?;
         IdentityStore::new(memory.clone()).save(&IdentityRecord::new(agent_id, vec![]))?;
         let state_store = StateStore::new(memory);
 
-        // Advertise this agent's presence on the (simulated) mesh.
+        // Advertise this agent's real presence: the resources it actually has
+        // (when using real sensors) and the capabilities its profile grants.
+        let adv_resources = if config.real_sensors {
+            tick.sensor()
+                .snapshot()
+                .map(|s| s.resources)
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let adv_caps = profile_capabilities(config.profile);
         tick.sensor()
-            .advertise(&[], &[])
+            .advertise(&adv_resources, &adv_caps)
             .unwrap_or_else(|e| tracing::warn!("advertise failed: {e}"));
+
+        // When opted in on Linux, apply the real OS resource limiter and read
+        // the real power sensor (best-effort; reported, not fatal).
+        if config.real_sensors {
+            #[cfg(target_os = "linux")]
+            {
+                let lim = vitalis_metabolism::os::default_limiter();
+                let out = lim.apply(0.5, 0.5);
+                tracing::info!(
+                    enforced = out.enforced,
+                    detail = %out.detail,
+                    "os resource limiter applied"
+                );
+                if let Ok(r) = vitalis_metabolism::os::default_power_sensor().read() {
+                    tracing::info!(
+                        real = r.real,
+                        energy_j = r.energy_joules,
+                        temp_c = ?r.temperature_celsius,
+                        "power sensor reading"
+                    );
+                }
+            }
+        }
 
         let energy_remaining = config.energy_capacity;
         Ok(Self {
@@ -110,6 +197,25 @@ impl Drive {
         self.agent_id
     }
 
+    pub fn defender_public_key(&self) -> Vec<u8> {
+        self.defender.public_key()
+    }
+
+    /// Restore and verify the most recently persisted checkpoint, returning its
+    /// payload. Proves the stored checkpoint carries a valid seal (P0.1).
+    pub fn verify_stored_checkpoint(&self) -> Result<Vec<u8>> {
+        let bytes = self
+            .state_store
+            .get::<Vec<u8>>("checkpoint")?
+            .ok_or_else(|| Error::Invalid("no stored checkpoint".into()))?;
+        let mut r = Replicator::new(self.agent_id, self.config.max_copies, 4, 2);
+        r.with_verifier(Box::new(BoundVerifier::new(
+            Arc::new(self.defender.clone()),
+            self.agent_id,
+        )));
+        r.restore_state(&bytes)
+    }
+
     /// Build the current state blob.
     fn state(&self, cycle: u64) -> Result<Vec<u8>> {
         let st = AgentState {
@@ -122,15 +228,13 @@ impl Drive {
     }
 
     /// Capture + (attempt to) authorize a redundant copy, persisting the
-    /// checkpoint to memory.
+    /// checkpoint to memory. The checkpoint is signed by the wired defender.
     fn replicate(&mut self, reason: ReplicationReason) -> Result<()> {
         let state = self.state(self.tick.cycle())?;
         self.replicator.capture(&state)?;
         let bytes = self.replicator.checkpoint_bytes()?;
-        // Sign the checkpoint for integrity (defend layer).
-        let seal = self.defender.seal(&bytes);
-        assert!(self.defender.verify(&seal, &bytes));
-        // Persist checkpoint durably (proves G3 alongside memory).
+        // Persist checkpoint durably (proves G3 alongside memory). The blob is
+        // signed; restores are verified by the wired `BoundVerifier`.
         self.state_store.put("checkpoint", &bytes)?;
         // Erasure-code into shards to demonstrate redundancy.
         let shards = self.replicator.shards()?;
@@ -153,7 +257,26 @@ impl Drive {
     #[cfg(feature = "adapt")]
     fn maybe_adapt(&self) {
         use vitalis_adapt::{AdaptEngine, ChangeKind, ProposedChange};
+        // Use the real WASM/WASI sandbox boundary when the `wasm-sandbox`
+        // feature is enabled; otherwise fall back to the in-process bounds
+        // checker (P1.1).
+        #[cfg(feature = "wasm-sandbox")]
+        let engine = {
+            let sandbox = match vitalis_adapt::WasmSandbox::new(4096) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::warn!(
+                        cycle = self.tick.cycle(),
+                        "adapt: wasm sandbox unavailable: {e}"
+                    );
+                    return;
+                }
+            };
+            AdaptEngine::with_sandbox(Box::new(sandbox), 5)
+        };
+        #[cfg(not(feature = "wasm-sandbox"))]
         let engine = AdaptEngine::new(4096, 5);
+
         let change = ProposedChange::new(
             self.tick.cycle(),
             ChangeKind::Code,

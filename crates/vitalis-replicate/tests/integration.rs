@@ -1,8 +1,32 @@
-use vitalis_core::traits::Replicate;
+use vitalis_core::traits::{Replicate, Signer, Verifier};
 use vitalis_core::AgentId;
 use vitalis_replicate::audit::ReplicationReason;
+use vitalis_replicate::format::Checkpoint;
 use vitalis_replicate::shards::{decode_shards, encode_shards};
 use vitalis_replicate::Replicator;
+
+/// A trivial signer: the "seal" is the data itself. Lets us exercise the
+/// Replicator's sign/verify wiring without pulling in `vitalis-defend` (which
+/// the layering rule forbids `vitalis-replicate` from depending on — even as a
+/// dev-dep). The real Defender + TOFU pinning is exercised end-to-end via the
+/// `vitalis-drive` integration tests.
+struct EchoSigner;
+
+impl Signer for EchoSigner {
+    fn sign(&self, data: &[u8]) -> Vec<u8> {
+        data.to_vec()
+    }
+}
+
+/// A verifier that accepts iff the seal equals the data (i.e. was produced by
+/// [`EchoSigner`]).
+struct EchoVerifier;
+
+impl Verifier for EchoVerifier {
+    fn verify(&self, data: &[u8], seal: &[u8]) -> bool {
+        seal == data
+    }
+}
 
 #[test]
 fn checkpoint_roundtrip() {
@@ -85,4 +109,56 @@ fn migrate_transfers_checkpoint() {
         .entries()
         .iter()
         .any(|e| e.reason == ReplicationReason::Migration));
+}
+
+/// A signed checkpoint restores cleanly, and an unsigned / wrong-seal /
+/// tampered one is rejected (P0.1 — signing is actually verified on restore).
+#[test]
+fn signed_checkpoint_restores_but_poisoned_is_rejected() {
+    let id = AgentId::new();
+
+    let mut r = Replicator::new(id, 3, 4, 2);
+    r.with_signer(Box::new(EchoSigner));
+    r.with_verifier(Box::new(EchoVerifier));
+    r.capture(b"live agent state").unwrap();
+    let bytes = r.checkpoint_bytes().unwrap();
+
+    // Happy path: the signed checkpoint verifies and restores.
+    assert_eq!(r.restore_state(&bytes).unwrap(), b"live agent state");
+
+    // Unsigned checkpoint is rejected outright (P0.1 enforcement half).
+    let unsigned = Checkpoint::new(id, b"live agent state".to_vec(), 0)
+        .to_bytes()
+        .unwrap();
+    assert!(r.restore_state(&unsigned).is_err());
+
+    // Wrong-seal checkpoint: a seal that does not match the signed bytes is
+    // rejected (the analog of a forged / swapped signing identity).
+    let mut wrong_seal = bytes.clone();
+    // The seal is postcard-encoded last; flip a byte of the payload region so
+    // the verifier (seal == data) fails.
+    wrong_seal[5] ^= 0xFF;
+    assert!(r.restore_state(&wrong_seal).is_err());
+
+    // Tampered payload: the seal no longer matches the (now different) bytes.
+    let mut tampered = bytes.clone();
+    tampered[5] ^= 0xFF;
+    assert!(r.restore_state(&tampered).is_err());
+}
+
+/// A checkpoint for a different agent identity is always rejected, even with a
+/// valid verifier attached.
+#[test]
+fn restore_rejects_wrong_agent() {
+    let a = AgentId::new();
+    let b = AgentId::new();
+
+    let mut src = Replicator::new(a, 3, 4, 2);
+    src.with_signer(Box::new(EchoSigner));
+    src.capture(b"state for A").unwrap();
+    let bytes = src.checkpoint_bytes().unwrap();
+
+    let mut dst = Replicator::new(b, 3, 4, 2);
+    dst.with_verifier(Box::new(EchoVerifier));
+    assert!(dst.restore_state(&bytes).is_err());
 }

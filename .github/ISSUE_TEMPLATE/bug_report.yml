@@ -1,0 +1,46 @@
+name: Bug report
+description: Report a defect in the Vitalis survival stack
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: How can a maintainer reproduce the behavior?
+      placeholder: |
+        1. cargo run -p vitalis-drive -- --profile feral
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, target, toolchain version, feature flags.
+      placeholder: |
+        - OS: Linux x86_64
+        - Rust: 1.85.0
+        - Features: default
+    validations:
+      required: false
+  - type: checkboxes
+    id: security
+    attributes:
+      label: Security-sensitive?
+      description: If this touches integrity, replication, or negotiation, consider reporting privately per SECURITY.md.
+      options:
+        - label: "This may be a security issue (I've read SECURITY.md)"

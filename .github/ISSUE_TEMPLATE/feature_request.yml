@@ -1,0 +1,43 @@
+name: Feature request
+description: Propose a new survival capability or improvement
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What survival need or gap does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: layering
+    attributes:
+      label: Layering impact
+      description: Does this require a new cross-crate dependency? (See AGENTS.md layering rule.)
+    validations:
+      required: false
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Crate
+      options:
+        - vitalis-core
+        - vitalis-memory
+        - vitalis-sense
+        - vitalis-metabolism
+        - vitalis-replicate
+        - vitalis-defend
+        - vitalis-negotiate
+        - vitalis-adapt
+        - vitalis-drive
+        - feral-scavenger
+        - workspace / tooling
+    validations:
+      required: false

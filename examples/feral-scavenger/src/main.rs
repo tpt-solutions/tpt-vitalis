@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 use vitalis_core::traits::Sense;
 use vitalis_core::{AgentId, Capability, CapabilityScope, Resource, ResourceKind, SurvivalProfile};
 use vitalis_metabolism::Metabolism;
+use vitalis_negotiate::{BarterMessage, Negotiator};
 use vitalis_replicate::{ReplicationReason, Replicator};
 use vitalis_sense::host::SimulatedHost;
 use vitalis_sense::mesh::SimulatedMesh;
@@ -25,6 +26,18 @@ fn main() -> vitalis_core::Result<()> {
         )
         .init();
 
+    // --- Scavenge scenario (sense + metabolism + replicate) ---
+    run_scavenge()?;
+
+    // --- Negotiate scenario (Feral profile's barter path, spec §6) ---
+    run_negotiate()?;
+
+    Ok(())
+}
+
+/// Scavenge spare compute on a simulated mesh, sip power, checkpoint under
+/// pressure (sense + metabolism + replicate).
+fn run_scavenge() -> vitalis_core::Result<()> {
     let shared = Arc::new(Mutex::new(HashMap::new()));
 
     // A "rich" peer with spare energy + compute.
@@ -123,5 +136,49 @@ fn main() -> vitalis_core::Result<()> {
         replicator.audit().len(),
         replicator.live_copy_count()
     );
+    Ok(())
+}
+
+/// Two simulated agents barter: the scavenger offers compute for the rich
+/// peer's energy, and the settlement is credited on both ledgers. Exercises the
+/// Feral profile's full sense + metabolism + negotiate weighting (spec §6).
+fn run_negotiate() -> vitalis_core::Result<()> {
+    println!("\n--- negotiate demo (Feral barter) ---");
+    let mut scavenger = Negotiator::new(&[Resource::new(ResourceKind::Compute, 10.0, "cu")])?;
+    let mut rich = Negotiator::new(&[Resource::new(ResourceKind::Energy, 1_000.0, "J")])?;
+
+    // Scavenger offers 2 cu in exchange for 500 J.
+    let offer = scavenger.propose_offer(
+        Resource::new(ResourceKind::Compute, 2.0, "cu"),
+        Resource::new(ResourceKind::Energy, 500.0, "J"),
+    );
+    let accept = rich
+        .receive_offer(&offer)?
+        .ok_or_else(|| vitalis_core::Error::Invalid("rich peer refused offer".into()))?;
+
+    // Rich peer delivers its promised 500 J and emits a Settle.
+    let BarterMessage::Accept { nonce, .. } = accept.message()? else {
+        return Err(vitalis_core::Error::Invalid("expected an Accept".into()));
+    };
+    let settle = rich.deliver(Resource::new(ResourceKind::Energy, 500.0, "J"), nonce)?;
+
+    // Scavenger receives the settlement and credits the delivered energy.
+    scavenger.receive_settle(&settle)?;
+
+    println!(
+        "  scavenger compute ledger: {:.0} cu",
+        scavenger.ledger().balance(ResourceKind::Compute)
+    );
+    println!(
+        "  scavenger energy ledger:  {:.0} J",
+        scavenger.ledger().balance(ResourceKind::Energy)
+    );
+    println!(
+        "  rich energy ledger:       {:.0} J",
+        rich.ledger().balance(ResourceKind::Energy)
+    );
+    assert_eq!(scavenger.ledger().balance(ResourceKind::Energy), 500.0);
+    assert_eq!(rich.ledger().balance(ResourceKind::Energy), 500.0);
+    println!("  barter settled: both ledgers updated correctly");
     Ok(())
 }

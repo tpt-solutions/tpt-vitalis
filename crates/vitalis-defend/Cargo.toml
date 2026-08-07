@@ -8,6 +8,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+readme.workspace = true
 keywords = ["survival", "security", "integrity", "vitalis", "defend"]
 categories = ["cryptography", "os"]
 

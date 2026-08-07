@@ -61,9 +61,11 @@ impl AdaptEngine {
         self.kill_switch.load(Ordering::SeqCst)
     }
 
-    /// Propose a change. It is verified (sandbox bounds + rate limit +
-    /// kill-switch) and, if all pass, applied. Every attempt is audited.
-    pub fn propose(&self, change: &ProposedChange) -> Result<AdaptationResult> {
+    /// Independent verification step. Returns `Ok(true)` if the change passes
+    /// the sandbox bounds, the rate limit, and the kill-switch; `Ok(false)` if
+    /// it is rejected by the sandbox or rate limit; `Err` if the kill-switch is
+    /// engaged (a refused proposal, not a bounds failure).
+    pub fn verify(&self, change: &ProposedChange) -> Result<bool> {
         if self.kill_switch_engaged() {
             self.record(change, false, "kill-switch engaged");
             return Err(Error::Invalid(
@@ -74,17 +76,63 @@ impl AdaptEngine {
             self.record(
                 change,
                 false,
-                format!("diff {}B exceeds sandbox cap", change.diff_size(),),
+                format!("diff {}B exceeds sandbox cap", change.diff_size()),
             );
-            return Err(Error::Invalid("change exceeds sandbox bounds".into()));
+            return Ok(false);
         }
         if self.proposals.load(Ordering::SeqCst) >= self.max_proposals {
             self.record(change, false, "rate limit reached");
-            return Err(Error::Invalid("adapt rate limit reached".into()));
+            return Ok(false);
+        }
+        Ok(true)
+    }
+
+    /// Apply a *verified* change via a caller-supplied hook. If the hook fails,
+    /// the supplied `rollback_fn` is invoked to undo any partial effect, then
+    /// the error is returned. Every attempt — applied or rolled back — is
+    /// written to the audit log. Returns [`AdaptationResult::Rejected`] (as an
+    /// `Err`) if the change fails verification.
+    pub fn apply(
+        &self,
+        change: &ProposedChange,
+        apply_fn: impl FnOnce(&ProposedChange) -> Result<()>,
+        rollback_fn: impl FnOnce(&ProposedChange) -> Result<()>,
+    ) -> Result<AdaptationResult> {
+        if !self.verify(change)? {
+            return Err(Error::Invalid(
+                "change exceeds sandbox bounds or rate limit".into(),
+            ));
         }
         self.proposals.fetch_add(1, Ordering::SeqCst);
-        self.record(change, true, "verified and applied");
-        Ok(AdaptationResult::Applied)
+        match apply_fn(change) {
+            Ok(()) => {
+                self.record(change, true, "verified and applied");
+                Ok(AdaptationResult::Applied)
+            }
+            Err(e) => {
+                let _ = rollback_fn(change);
+                self.record(change, false, format!("apply failed; rolled back: {e}"));
+                Err(e)
+            }
+        }
+    }
+
+    /// Roll back a previously applied change via a caller-supplied hook.
+    pub fn rollback(
+        &self,
+        change: &ProposedChange,
+        rollback_fn: impl FnOnce(&ProposedChange) -> Result<()>,
+    ) -> Result<()> {
+        rollback_fn(change)?;
+        self.record(change, false, "rolled back on demand");
+        Ok(())
+    }
+
+    /// Convenience wrapper: propose a change, apply it via a no-op hook and roll
+    /// back via a no-op hook (the caller supplies real hooks to
+    /// [`AdaptEngine::apply`]/[`AdaptEngine::rollback`] when they want effects).
+    pub fn propose(&self, change: &ProposedChange) -> Result<AdaptationResult> {
+        self.apply(change, |_| Ok(()), |_| Ok(()))
     }
 
     fn record(&self, change: &ProposedChange, applied: bool, reason: impl Into<String>) {
@@ -151,5 +199,113 @@ mod tests {
         assert!(engine.propose(&change(1, 8)).is_ok());
         assert!(engine.propose(&change(2, 8)).is_err());
         assert_eq!(engine.proposals_made(), 1);
+    }
+
+    #[test]
+    fn verify_rejects_out_of_bounds_without_applying() {
+        let engine = AdaptEngine::new(32, 10);
+        assert_eq!(engine.verify(&change(1, 64)).unwrap(), false);
+        // verify does not consume the rate-limit budget.
+        assert_eq!(engine.proposals_made(), 0);
+    }
+
+    #[test]
+    fn apply_with_failing_hook_rolls_back_and_errors() {
+        use std::sync::Mutex;
+        let engine = AdaptEngine::new(1024, 10);
+        let applied = Mutex::new(0usize);
+        let r = engine.apply(
+            &change(1, 8),
+            |_| {
+                *applied.lock().unwrap() += 1;
+                Err(Error::Invalid("boom".into()))
+            },
+            |_| {
+                *applied.lock().unwrap() -= 1;
+                Ok(())
+            },
+        );
+        assert!(r.is_err());
+        // rollback undid the apply hook's effect.
+        assert_eq!(*applied.lock().unwrap(), 0);
+        assert!(engine.audit().iter().all(|e| !e.applied));
+    }
+
+    #[test]
+    fn rollback_hook_is_invoked() {
+        let engine = AdaptEngine::new(1024, 10);
+        let rolled = Mutex::new(false);
+        engine
+            .rollback(&change(1, 8), |_| {
+                *rolled.lock().unwrap() = true;
+                Ok(())
+            })
+            .unwrap();
+        assert!(*rolled.lock().unwrap());
+    }
+
+    #[test]
+    fn apply_with_successful_hook_applies_and_audits() {
+        use std::sync::Mutex;
+        let engine = AdaptEngine::new(1024, 10);
+        let counter = Mutex::new(0usize);
+        let r = engine
+            .apply(
+                &change(1, 8),
+                |_| {
+                    *counter.lock().unwrap() += 1;
+                    Ok(())
+                },
+                |_| {
+                    *counter.lock().unwrap() -= 1;
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(r, AdaptationResult::Applied);
+        assert_eq!(*counter.lock().unwrap(), 1);
+        let a = engine.audit();
+        assert_eq!(a.len(), 1);
+        assert!(a[0].applied);
+    }
+
+    #[test]
+    fn rollback_undoes_applied_change() {
+        use std::sync::Mutex;
+        let engine = AdaptEngine::new(1024, 10);
+        let counter = Mutex::new(0usize);
+        let change = change(1, 8);
+        engine
+            .apply(
+                &change,
+                |_| {
+                    *counter.lock().unwrap() += 1;
+                    Ok(())
+                },
+                |_| {
+                    *counter.lock().unwrap() -= 1;
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(*counter.lock().unwrap(), 1);
+        // A deliberate rollback via the engine restores the prior state.
+        engine
+            .rollback(&change, |_| {
+                *counter.lock().unwrap() -= 1;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(*counter.lock().unwrap(), 0);
+    }
+
+    #[test]
+    fn verify_accepts_in_bounds_and_rate_limit_rejects_extra() {
+        let engine = AdaptEngine::new(1024, 1);
+        assert!(engine.verify(&change(1, 8)).unwrap());
+        // Consume the single allowed proposal via apply.
+        engine.apply(&change(1, 8), |_| Ok(()), |_| Ok(())).unwrap();
+        // One more: rate limit reached, verify returns false (not an error).
+        assert!(!engine.verify(&change(2, 8)).unwrap());
     }
 }

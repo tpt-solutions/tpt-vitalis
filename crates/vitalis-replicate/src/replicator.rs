@@ -24,6 +24,13 @@ pub struct Replicator {
     audit: ReplicationAudit,
     data_shards: usize,
     parity_shards: usize,
+    /// Optional integrity backend: signs captured checkpoints. `None` means
+    /// checkpoints are left unsigned (only safe for tests / trusted stores).
+    signer: Option<Box<dyn Signer + Send + Sync>>,
+    /// Optional integrity backend: verifies checkpoint seals on restore. When
+    /// set, an unsigned or failed-verification checkpoint is *rejected* — this
+    /// is the enforcement half of the signing contract (see P0.1).
+    verifier: Option<Box<dyn Verifier + Send + Sync>>,
 }
 
 impl Replicator {
@@ -42,7 +49,23 @@ impl Replicator {
             audit: ReplicationAudit::new(),
             data_shards,
             parity_shards,
+            signer: None,
+            verifier: None,
         }
+    }
+
+    /// Attach a signing backend. Captured checkpoints will carry a seal over
+    /// their signable bytes.
+    pub fn with_signer(&mut self, signer: Box<dyn Signer + Send + Sync>) -> &mut Self {
+        self.signer = Some(signer);
+        self
+    }
+
+    /// Attach a verification backend. Restores will reject unsigned or
+    /// failed-verification checkpoints.
+    pub fn with_verifier(&mut self, verifier: Box<dyn Verifier + Send + Sync>) -> &mut Self {
+        self.verifier = Some(verifier);
+        self
     }
 
     /// The configured copy limit.
@@ -54,9 +77,14 @@ impl Replicator {
         &self.audit
     }
 
-    /// Capture a checkpoint of the running agent's state blob.
+    /// Capture a checkpoint of the running agent's state blob, signing it if a
+    /// [`Signer`] is configured.
     pub fn capture(&mut self, state: &[u8]) -> Result<()> {
-        let ckpt = Checkpoint::new(self.agent_id, state.to_vec(), now_secs());
+        let mut ckpt = Checkpoint::new(self.agent_id, state.to_vec(), now_secs());
+        if let Some(signer) = &self.signer {
+            let signable = ckpt.signable_bytes()?;
+            ckpt.seal = Some(signer.sign(&signable));
+        }
         self.current = Some(ckpt);
         self.audit.record(AuditEntry {
             agent_id: self.agent_id,
@@ -78,6 +106,11 @@ impl Replicator {
     }
 
     /// Restore state from a checkpoint blob, returning the agent state payload.
+    ///
+    /// When a [`Verifier`] is configured, the checkpoint's seal must be present
+    /// and verify successfully; an unsigned or failed-verification checkpoint is
+    /// rejected outright (this is the enforcement half of the signing contract,
+    /// see P0.1). A checkpoint for a different `agent_id` is always rejected.
     pub fn restore_state(&mut self, bytes: &[u8]) -> Result<Vec<u8>> {
         let ckpt = Checkpoint::from_bytes(bytes)?;
         if ckpt.agent_id != self.agent_id {
@@ -85,6 +118,18 @@ impl Replicator {
                 "checkpoint is for {} but this agent is {}",
                 ckpt.agent_id, self.agent_id
             )));
+        }
+        if let Some(verifier) = &self.verifier {
+            let seal = ckpt
+                .seal
+                .as_ref()
+                .ok_or_else(|| Error::Integrity("checkpoint is unsigned".into()))?;
+            let signable = ckpt.signable_bytes()?;
+            if !verifier.verify(&signable, seal) {
+                return Err(Error::Integrity(
+                    "checkpoint seal verification failed".into(),
+                ));
+            }
         }
         self.current = Some(ckpt.clone());
         Ok(ckpt.payload)

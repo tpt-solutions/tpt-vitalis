@@ -7,7 +7,7 @@
 //! agent priority.
 //!
 //! Hardware specifics (cgroups, rlimit, hwmon) are intentionally behind the
-//! [`Ledger`] / [`ThrottleController`] APIs so the same logic runs on the
+//! `Ledger` / `ThrottleController` APIs so the same logic runs on the
 //! brain tier and on a constrained ESP32 edge tier (where the limits are
 //! simulated). The *decision* logic is what we test; the OS plumbing is a
 //! later native binding.

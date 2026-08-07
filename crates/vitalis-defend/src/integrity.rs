@@ -6,8 +6,10 @@
 
 use ring::signature::{self, Ed25519KeyPair, KeyPair as _};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
-use vitalis_core::{Error, Result};
+use vitalis_core::{AgentId, Error, Result};
 
 /// A signing/verification key pair wrapper.
 pub struct KeyPair {
@@ -47,7 +49,34 @@ pub struct CheckpointSeal {
     pub public_key: Vec<u8>,
 }
 
-/// Verify a seal over `data`.
+/// Verify a seal over `data`, binding it to `agent_id` for trust-on-first-use
+/// (TOFU) key pinning. The first time a given `agent_id` is seen, its public
+/// key is pinned; thereafter only that key is accepted for that identity. A
+/// seal signed by a different key for the same `agent_id` is rejected, which is
+/// what makes identity forgery detectable (see `docs/threat-model.md`).
+///
+/// Returns `false` if the seal's public key is pinned to a *different* key than
+/// the one that signed it, or if the signature itself fails to verify.
+pub fn verify_checkpoint_for(
+    pin_store: &Mutex<HashMap<AgentId, Vec<u8>>>,
+    agent_id: AgentId,
+    seal: &CheckpointSeal,
+    data: &[u8],
+) -> bool {
+    {
+        let mut pins = pin_store.lock().unwrap_or_else(|e| e.into_inner());
+        match pins.get(&agent_id) {
+            Some(pinned) if pinned.as_slice() != seal.public_key.as_slice() => return false,
+            Some(_) => {}
+            None => {
+                pins.insert(agent_id, seal.public_key.clone());
+            }
+        }
+    }
+    verify_checkpoint(seal, data)
+}
+
+/// Verify a seal over `data` (no identity binding).
 pub fn verify_checkpoint(seal: &CheckpointSeal, data: &[u8]) -> bool {
     let pk = signature::UnparsedPublicKey::new(&signature::ED25519, &seal.public_key);
     pk.verify(data, &seal.signature).is_ok()
