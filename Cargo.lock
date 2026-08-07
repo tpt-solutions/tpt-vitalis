@@ -537,6 +537,7 @@ dependencies = [
  "vitalis-defend",
  "vitalis-metabolism",
  "vitalis-negotiate",
+ "vitalis-reflect",
  "vitalis-replicate",
  "vitalis-sense",
 ]
@@ -1700,6 +1701,7 @@ dependencies = [
  "vitalis-memory",
  "vitalis-metabolism",
  "vitalis-negotiate",
+ "vitalis-reflect",
  "vitalis-replicate",
  "vitalis-sense",
 ]
@@ -1734,6 +1736,14 @@ dependencies = [
  "postcard",
  "rand",
  "ring",
+ "serde",
+ "vitalis-core",
+]
+
+[[package]]
+name = "vitalis-reflect"
+version = "0.1.0"
+dependencies = [
  "serde",
  "vitalis-core",
 ]

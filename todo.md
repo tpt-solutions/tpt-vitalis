@@ -281,14 +281,14 @@ triggers replication + migration, end to end.
       discovered peers)
 - [x] Integrate with `vitalis-metabolism`'s budget ledger (successful
       barters adjust the resource budget)
-- [ ] Abuse/spam resistance (rate-limit requests; proof-of-work or stake
+- [x] Abuse/spam resistance (rate-limit requests; proof-of-work or stake
       requirement) *(corrected 2026-08-07 — no such code exists in
       `vitalis-negotiate`; see Phase 7 P0.4)*
 - [x] Integration test: two simulated agents barter compute for storage,
       both ledgers update correctly
 - [x] Integration test: a bad-faith peer is detected and handled per the
       settlement policy
-- [ ] Extend `feral-scavenger`/`vitalis-drive` to exercise negotiate — this
+- [x] Extend `feral-scavenger`/`vitalis-drive` to exercise negotiate — this
       demonstrates the Feral profile's full §6 weighting (sense +
       metabolism + negotiate) *(corrected 2026-08-07 — neither binary
       depends on `vitalis-negotiate` today; see Phase 7 P1.2)*
@@ -314,11 +314,11 @@ protocol with cryptographic guarantees, and a cheating peer is caught.
       default at the crate/workspace level** (not just a runtime flag)
 - [x] Reuse the Phase 3 WASM/WASI sandbox as the execution boundary for
       proposed self-modifications
-- [ ] Implement a propose/verify split (never auto-apply a change without
+- [x] Implement a propose/verify split (never auto-apply a change without
       independent verification passing) *(corrected 2026-08-07 —
       `AdaptEngine::propose()` is a single fused method; no independent
       `verify()` step exists. See Phase 7 P1.1.)*
-- [ ] Hard bounds per invocation: rate limits, diff-size caps, rollback
+- [x] Hard bounds per invocation: rate limits, diff-size caps, rollback
       always available *(corrected 2026-08-07 — rate limit and diff-size cap
       are real; rollback does not exist anywhere in the crate. See Phase 7 P1.1.)*
 - [x] Audit log of every adaptation attempt (proposed change, verification
@@ -558,9 +558,118 @@ survives independent of that file, per the repo's existing housekeeping habit.*
 
 ---
 
+## Phase 9 — Reflection: Prediction + Evaluation
+
+*Goal: a self-introspection capability — an agent that predicts its own
+near-future trajectory (energy, threats, peer behavior) and evaluates those
+predictions against what actually happened. Observational only: no behavior
+change yet. Full design: Claude plan history
+("i-m-just-thinking-about-vivid-nebula"). Tracked here per-item so it
+survives independent of that file, per the repo's existing housekeeping
+habit.*
+
+### vitalis-reflect (new crate)
+- [x] Scaffold crate, depends on `vitalis-core` **only** (no direct
+      dependency on metabolism/defend/negotiate — `vitalis-drive` feeds it
+      plain scalars each cycle, per the layering rule)
+- [x] `sample.rs`: `ReflectSample`/`PeerSample` — what `vitalis-drive` hands
+      in per cycle (energy, threat event, peer trust samples)
+- [x] `predict.rs`: `PredictionRecord`/`PredictedValue` (Energy /
+      ThreatLikelihood / PeerOutcome) + deterministic trend-extrapolation
+      math (linear slope over a bounded window — no ML dependency)
+- [x] `evaluate.rs`: `EvaluationRecord` + scoring logic (compare a resolved
+      prediction against the actual sample at its target cycle)
+- [x] `audit.rs`: `ReflectAudit` (`Mutex<Vec<_>>` log, same shape as
+      `vitalis-replicate`'s `ReplicationAudit`)
+- [x] `reflector.rs`: `Reflector` — bounded `VecDeque` history (fixed
+      window, must not grow unboundedly over a long-running loop) +
+      `tick()` orchestration (resolve pending → record history → predict)
+- [x] `calibration()` summary accessor (mean energy error, threat/peer hit
+      rates)
+- [x] `tests/reflect_tests.rs`: energy-trend prediction accuracy +
+      evaluation; threat-likelihood rises then falls with a burst of
+      warnings; peer-outcome prediction flips honors→breaks as trust decays,
+      evaluation scores the hit; history buffers stay bounded under a long
+      run
+
+### apps/vitalis-drive
+- [x] Add `vitalis-reflect.workspace = true` dependency
+- [x] `DriveConfig`: `reflect_window`/`reflect_horizon` fields with
+      `#[serde(default = ...)]`
+- [x] `Drive`: add a `reflector: Reflector` field, constructed in `Drive::new`
+- [x] `run()`: new numbered **"5. REFLECT"** step after NEGOTIATE (4b) and
+      before ACT (renumber ACT to 6); build a `ReflectSample` from data
+      already in scope (cycle, energy, the cycle's `ThreatEvent`), log
+      returned predictions via `tracing::info!`. `peers: Vec::new()` by
+      default since the main loop doesn't barter with real peers yet
+      (see Phase 8 note)
+
+### examples/feral-scavenger
+- [x] Wire a `Reflector` into the existing negotiate demo (P1.2): sample
+      each peer's `reputation()` before a settle/timeout, predict
+      honor-vs-break, compare against what actually happened, and print the
+      prediction-vs-actual comparison in the demo output
+
+### Repo housekeeping
+- [x] Root `Cargo.toml`: add `crates/vitalis-reflect` to `members` +
+      `workspace.dependencies`
+- [x] `README.md`: crate status table row
+- [x] `AGENTS.md` (source of truth) + `CLAUDE.md` mirror: add
+      `vitalis-reflect` to the crate layout list
+- [x] `CHANGELOG.md` entry
+
+### Deferred / explicit future work (not built in this phase)
+- [ ] Wire predicted energy-critical horizon into DECIDE as an *advisory*
+      proactive-replication trigger, once calibration data exists —
+      deliberately deferred; mirrors `vitalis-adapt`'s off-by-default gating
+      philosophy rather than letting an unproven predictor steer real
+      replication/migration behavior immediately
+
+### Mechanical follow-through
+- [x] Final pass: `cargo fmt --all`, `cargo clippy --workspace --all-targets
+      -- -D warnings`, `cargo test --workspace`, `cargo deny check` all green
+- [x] Add a dated Session Notes entry once this phase lands.
+
+---
+
 ## Session Notes
 
 *(dated entries added here as work actually happens)*
+
+### 2026-08-07 — Phase 9 observational reflection (predict + evaluate)
+
+Implemented `vitalis-reflect` (new crate, `vitalis-core`-only) and wired it
+observationally into the stack:
+
+- **vitalis-reflect**: an agent predicts its own near-future trajectory and
+  evaluates those predictions against reality, but changes no behavior. Modules:
+  `sample` (`ReflectSample`/`PeerSample`), `predict` (linear trend
+  extrapolation over a bounded window for `Energy`, recent-threat fraction for
+  `ThreatLikelihood`, trust-trend → honor probability for `PeerOutcome`),
+  `evaluate` (scoring), `audit` (`ReflectAudit`, mirroring
+  `vitalis-replicate`'s `ReplicationAudit`), and `reflector` (bounded
+  `VecDeque` history + `tick()` orchestration + `calibration()`). No ML
+  dependency; history/pending buffers stay bounded under a long run. Tests cover
+  energy-trend accuracy, the threat-likelihood burst rise/fall, the
+  honor→break peer flip, and buffer boundedness.
+- **vitalis-drive**: a `Reflector` is constructed alongside `Defender`/`Negotiator`;
+  the loop gains a new numbered **5. REFLECT** step after NEGOTIATE (ACT renumbered
+  to 6). Each cycle feeds energy + the cycle's `ThreatEvent` + an empty peer set
+  into the reflector and logs predictions/evaluations. `DriveConfig` gains
+  `reflect_window` (5) / `reflect_horizon` (3).
+- **feral-scavenger**: `run_negotiate` now wires a `Reflector` in — it samples the
+  rich peer's trust, predicts honor-vs-break, and compares against the actual
+  (honored) outcome, printing the prediction-vs-actual comparison.
+- Housekeeping: root `Cargo.toml` members + `workspace.dependencies`,
+  README crate table/layout/count, AGENTS.md + CLAUDE.md layout, CHANGELOG entry.
+
+Wiring the predicted energy-critical horizon into DECIDE as a proactive-replication
+trigger is deliberately deferred (observational only), mirroring `vitalis-adapt`'s
+off-by-default gating philosophy.
+
+**CI gate is green**: `cargo fmt --all -- --check`, `cargo clippy --workspace
+--all-targets -- -D warnings`, `cargo test --workspace`, and `cargo deny check`
+all pass.
 
 ### 2026-08-07 — Phase 8 reputation deepening (direct + indirect reciprocity)
 

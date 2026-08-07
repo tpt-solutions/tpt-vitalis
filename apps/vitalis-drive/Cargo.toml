@@ -24,6 +24,7 @@ vitalis-metabolism.workspace = true
 vitalis-replicate.workspace = true
 vitalis-defend.workspace = true
 vitalis-negotiate.workspace = true
+vitalis-reflect.workspace = true
 vitalis-adapt = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true

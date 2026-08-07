@@ -209,6 +209,8 @@ fn resolve_config(args: &RunArgs) -> Result<DriveConfig> {
             simulate_kill_at: args.kill_at,
             real_sensors: args.real_sensors,
             negotiate_timeout: 5,
+            reflect_window: 5,
+            reflect_horizon: 3,
         })
     }
 }

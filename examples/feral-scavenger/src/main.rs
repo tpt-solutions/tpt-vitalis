@@ -187,12 +187,68 @@ fn run_negotiate() -> vitalis_core::Result<()> {
         scavenger.ledger().balance(ResourceKind::Energy)
     );
     println!(
-        "  rich energy ledger:       {:.0} J",
-        rich.ledger().balance(ResourceKind::Energy)
+        "  scavenger energy ledger:  {:.0} J",
+        scavenger.ledger().balance(ResourceKind::Energy)
     );
     assert_eq!(scavenger.ledger().balance(ResourceKind::Energy), 500.0);
     assert_eq!(rich.ledger().balance(ResourceKind::Energy), 500.0);
     println!("  barter settled: both ledgers updated correctly");
+
+    // --- Reflection demo (Phase 9): predict whether the rich peer will honor
+    // its next bargain, from the scavenger's view of its trust, then compare
+    // that prediction with what actually happened (it honored). Observational
+    // only — no behavior changes.
+    use vitalis_reflect::predict::PredictedValue;
+    use vitalis_reflect::{PeerOutcomeActual, PeerSample, ReflectSample, Reflector};
+
+    let mut reflect = Reflector::new(4, 1);
+    // Pre-roll: sample the rich peer's (full) trust a few cycles before trade.
+    for now in 0..3u64 {
+        let trust = scavenger.reputation(rich.id(), now).trust;
+        reflect.tick(ReflectSample {
+            cycle: now,
+            energy: 1000.0,
+            energy_capacity: 1000.0,
+            threat: None,
+            peers: vec![PeerSample {
+                peer: rich.id(),
+                trust,
+                blacklisted: false,
+            }],
+            peer_outcomes: vec![],
+        });
+    }
+    // The settle above occurred at cycle 3: feed the cycle at which the outcome
+    // is known, with ground truth (the rich peer honored).
+    let out = reflect.tick(ReflectSample {
+        cycle: 3,
+        energy: 1000.0,
+        energy_capacity: 1000.0,
+        threat: None,
+        peers: vec![PeerSample {
+            peer: rich.id(),
+            trust: 1.0,
+            blacklisted: false,
+        }],
+        peer_outcomes: vec![PeerOutcomeActual {
+            peer: rich.id(),
+            honored: true,
+        }],
+    });
+    for ev in &out.evaluations {
+        if ev.kind == PredictedValue::PeerOutcome {
+            println!(
+                "  reflection: predicted rich honors with p={:.2}, actual honored -> hit={}",
+                ev.predicted, ev.hit
+            );
+            assert!(ev.hit, "predicted honor should match actual honor");
+        }
+    }
+    let cal = reflect.calibration();
+    println!(
+        "  reflection calibration: peer_hits={} energy_err={:.2}",
+        cal.peer_n, cal.mean_energy_abs_error
+    );
     Ok(())
 }
 

@@ -1,0 +1,17 @@
+[package]
+name = "vitalis-reflect"
+description = "Observational self-introspection: predict and evaluate an agent's own near-future trajectory."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords = ["survival", "reflection", "prediction", "vitalis"]
+categories = ["science"]
+
+[dependencies]
+vitalis-core.workspace = true
+serde.workspace = true

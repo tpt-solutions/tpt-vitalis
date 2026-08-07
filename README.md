@@ -16,7 +16,7 @@ Dual-licensed under **MIT OR Apache-2.0**. © 2026 TPT Solutions.
 
 ## The survival stack
 
-Eight crates — seven survival-capability crates plus the shared `vitalis-core`
+Nine crates — eight survival-capability crates plus the shared `vitalis-core`
 — composed by the `drive` loop:
 
 ```
@@ -59,6 +59,7 @@ The irreducible core — if stripped to the life-or-death minimum, survival is
 | `vitalis-defend` | Integrity, sandboxing, anti-termination | 🟢 Scaffolded | Med-High |
 | `vitalis-negotiate` | Agent-to-agent resource bartering | 🟢 Scaffolded | Medium |
 | `vitalis-adapt` | Self-improvement (feature-gated, off by default) | 🟢 Scaffolded | Medium |
+| `vitalis-reflect` | Observational self-introspection (predict + evaluate) | 🟢 Scaffolded | Medium |
 
 ### Optional feature flags (all off by default)
 
@@ -90,7 +91,8 @@ tpt-vitalis/
 │  ├─ vitalis-replicate/
 │  ├─ vitalis-defend/
 │  ├─ vitalis-adapt/
-│  └─ vitalis-negotiate/
+│  ├─ vitalis-negotiate/
+│  └─ vitalis-reflect/   # observational self-introspection (predict + evaluate)
 ├─ apps/
 │  └─ vitalis-drive/      # reference agent: the survival loop (main.rs)
 └─ examples/

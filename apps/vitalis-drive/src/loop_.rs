@@ -11,6 +11,7 @@ use vitalis_defend::{BoundVerifier, Defender, TerminationSignal};
 use vitalis_memory::{IdentityRecord, IdentityStore, MemoryStore, StateStore};
 use vitalis_metabolism::Metabolism;
 use vitalis_negotiate::Negotiator;
+use vitalis_reflect::{ReflectSample, Reflector};
 use vitalis_replicate::{ReplicationReason, Replicator};
 use vitalis_sense::mesh::SimulatedMesh;
 use vitalis_sense::sense::{LocalSensor, SenseTick};
@@ -41,6 +42,12 @@ pub struct DriveConfig {
     /// treated as a broken bargain (Phase 8 reputation deepening).
     #[serde(default = "default_negotiate_timeout")]
     pub negotiate_timeout: u64,
+    /// Reflection window (cycles of history used for prediction) — Phase 9.
+    #[serde(default = "default_reflect_window")]
+    pub reflect_window: usize,
+    /// Reflection horizon (cycles ahead to predict) — Phase 9.
+    #[serde(default = "default_reflect_horizon")]
+    pub reflect_horizon: usize,
 }
 
 impl Default for DriveConfig {
@@ -54,8 +61,20 @@ impl Default for DriveConfig {
             simulate_kill_at: None,
             real_sensors: false,
             negotiate_timeout: 5,
+            reflect_window: 5,
+            reflect_horizon: 3,
         }
     }
+}
+
+/// Default reflection window (cycles of history used for prediction).
+fn default_reflect_window() -> usize {
+    5
+}
+
+/// Default reflection horizon (cycles ahead to predict).
+fn default_reflect_horizon() -> usize {
+    3
 }
 
 /// Default fraction-of-capacity at which the agent proactively replicates.
@@ -116,8 +135,11 @@ pub struct Drive {
     defender: Defender,
     negotiator: Negotiator,
     state_store: StateStore,
+    reflector: Reflector,
     energy_remaining: f64,
     replicated: bool,
+    /// The most severe threat classified this cycle (fed to REFLECT).
+    last_threat: Option<vitalis_core::ThreatEvent>,
 }
 
 impl Drive {
@@ -204,6 +226,9 @@ impl Drive {
             Resource::new(ResourceKind::Compute, 1.0, "cu"),
             Resource::new(ResourceKind::Energy, config.energy_capacity, "J"),
         ])?;
+        // Observational self-introspection (Phase 9): predict our own
+        // trajectory; never acts on it. Bounded history/horizon from config.
+        let reflector = Reflector::new(config.reflect_window, config.reflect_horizon);
         Ok(Self {
             agent_id,
             config,
@@ -213,8 +238,10 @@ impl Drive {
             defender,
             negotiator,
             state_store,
+            reflector,
             energy_remaining,
             replicated: false,
+            last_threat: None,
         })
     }
 
@@ -366,6 +393,8 @@ impl Drive {
             };
 
             if let Some(ev) = self.defender.classify(&signal)? {
+                // Record the most severe threat of the cycle for REFLECT.
+                self.last_threat = Some(ev.clone());
                 tracing::warn!(
                     cycle,
                     class = ?ev.threat.class(),
@@ -396,6 +425,9 @@ impl Drive {
                     message: format!("peer {} broke a bargain", bb.peer),
                 };
                 if let Some(ev) = self.defender.classify(&signal)? {
+                    // A broken bargain is the most severe (warning) signal of
+                    // this cycle for REFLECT.
+                    self.last_threat = Some(ev.clone());
                     tracing::warn!(
                         cycle,
                         trust_after = bb.trust_after,
@@ -409,7 +441,49 @@ impl Drive {
                 }
             }
 
-            // 5. ACT: spend energy; an actual depletion ends the run.
+            // 5. REFLECT (Phase 9): predict our own near-future trajectory and
+            // evaluate earlier predictions against what actually happened this
+            // cycle. Observational only — it changes nothing about how we act.
+            // The main loop has no real peers, so `peers`/`peer_outcomes` are
+            // empty (the feral-scavenger demo supplies ground truth instead).
+            let sample = ReflectSample {
+                cycle: self.tick.cycle(),
+                energy: self.energy_remaining,
+                energy_capacity: self.config.energy_capacity,
+                threat: self.last_threat.clone(),
+                peers: Vec::new(),
+                peer_outcomes: Vec::new(),
+            };
+            let out = self.reflector.tick(sample);
+            for pred in &out.prediction.predictions {
+                tracing::info!(
+                    cycle,
+                    kind = ?pred.kind,
+                    target = pred.target_cycle,
+                    predicted = pred.value,
+                    "reflect prediction"
+                );
+            }
+            for ev in &out.evaluations {
+                tracing::info!(
+                    cycle,
+                    kind = ?ev.kind,
+                    predicted = ev.predicted,
+                    actual = ev.actual,
+                    hit = ev.hit,
+                    "reflect evaluation"
+                );
+            }
+            let cal = self.reflector.calibration();
+            tracing::debug!(
+                cycle,
+                energy_err = cal.mean_energy_abs_error,
+                threat_hits = cal.threat_n,
+                peer_hits = cal.peer_n,
+                "reflect calibration"
+            );
+
+            // 6. ACT: spend energy; an actual depletion ends the run.
             self.energy_remaining = (self.energy_remaining - self.config.cost_per_cycle).max(0.0);
             #[cfg(feature = "adapt")]
             self.maybe_adapt();

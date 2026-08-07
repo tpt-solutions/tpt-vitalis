@@ -22,6 +22,7 @@ crates/vitalis-replicate   self-copy, live-migrate, erasure-coded redundancy
 crates/vitalis-defend      integrity, sandboxing, anti-termination
 crates/vitalis-adapt       self-improvement — FEATURE-GATED, OFF BY DEFAULT
 crates/vitalis-negotiate   agent-to-agent resource bartering
+crates/vitalis-reflect     observational self-introspection — predict + evaluate (depends on vitalis-core only)
 apps/vitalis-drive         the survival goal loop (main.rs) — composes the crates
 examples/feral-scavenger   demo agent exercising sense + metabolism + replicate
 ```

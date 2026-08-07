@@ -101,6 +101,29 @@ the default build and the MSRV-1.85 CI remain unaffected.
   a new `run_gossip` demo shows hearsay-driven distrust, corroboration, and a
   multi-hop relay through the defend classifier.
 
+### Reflection: prediction + evaluation (Phase 9)
+- `vitalis-reflect` (new crate, depends on `vitalis-core` **only**): observational
+  self-introspection. Predicts an agent's own near-future trajectory — energy
+  (linear trend extrapolation over a bounded window), threat likelihood (fraction
+  of recent warning/critical cycles), and peer outcomes (trust-trend → honor
+  probability) — and evaluates those predictions against what actually happened.
+  No ML dependency; bounded `VecDeque` history so a long run never grows memory;
+  an append-only `ReflectAudit` and a `calibration()` summary (mean energy error,
+  threat/peer hit rates).
+- `vitalis-drive`: a `Reflector` is constructed alongside the `Defender`/`Negotiator`
+  and the loop gains a new numbered **5. REFLECT** step after NEGOTIATE (ACT
+  renumbered to 6). It feeds each cycle's energy, the cycle's `ThreatEvent`, and an
+  empty peer set (the main loop has no real peers) into the reflector and logs the
+  returned predictions/evaluations. `DriveConfig` gains `reflect_window` (default
+  5) and `reflect_horizon` (default 3).
+- `examples/feral-scavenger`: `run_negotiate` now wires a `Reflector` in — it
+  samples the rich peer's trust, predicts honor-vs-break, and compares the
+  prediction against the actual (honored) outcome, printing the prediction-vs-actual
+  comparison.
+- Wiring the predicted energy-critical horizon into DECIDE as a *proactive*
+  replication trigger is deliberately deferred (observational only for now),
+  mirroring `vitalis-adapt`'s off-by-default gating philosophy.
+
 ### Notes
 - `vitalis-sense` peer mesh remains the simulated `SimulatedMesh` (swap-in
   point for a real libp2p transport); RISC-V/ESP32 hardware validation and

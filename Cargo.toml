@@ -9,6 +9,7 @@ members = [
     "crates/vitalis-defend",
     "crates/vitalis-negotiate",
     "crates/vitalis-adapt",
+    "crates/vitalis-reflect",
     "apps/vitalis-drive",
     "examples/feral-scavenger",
 ]
@@ -33,6 +34,7 @@ vitalis-replicate = { path = "crates/vitalis-replicate", version = "0.1.0" }
 vitalis-defend = { path = "crates/vitalis-defend", version = "0.1.0" }
 vitalis-negotiate = { path = "crates/vitalis-negotiate", version = "0.1.0" }
 vitalis-adapt = { path = "crates/vitalis-adapt", version = "0.1.0" }
+vitalis-reflect = { path = "crates/vitalis-reflect", version = "0.1.0" }
 
 # External dependencies
 serde = { version = "1.0", features = ["derive"] }
