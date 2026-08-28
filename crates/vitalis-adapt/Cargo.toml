@@ -29,4 +29,4 @@ serde.workspace = true
 rand.workspace = true
 
 # WASM/WASI runtime for the sandbox (feature-gated, off by default).
-wasmtime = { version = "21", optional = true }
+wasmtime = { version = "48", optional = true }
