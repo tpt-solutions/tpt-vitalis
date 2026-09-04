@@ -29,7 +29,7 @@ ring.workspace = true
 rand.workspace = true
 
 # WASM/WASI runtime for the capability sandbox (feature-gated, off by default).
-wasmtime = { version = "21", optional = true }
+wasmtime = { version = "48", optional = true }
 
 # Real OS primitives are Linux-only.
 [target.'cfg(target_os = "linux")'.dependencies]
